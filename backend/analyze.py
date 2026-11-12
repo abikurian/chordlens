@@ -16,7 +16,10 @@ logger = logging.getLogger(__name__)
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 CACHE_DIR = BASE_DIR / "cache"
-CACHE_VERSION = "v2"
+BEAT_THIS_CKPT_DIR = BASE_DIR / "models" / "beat_this"
+BEAT_THIS_CKPT_PATH = BEAT_THIS_CKPT_DIR / "final0.ckpt"
+BEAT_THIS_CKPT_URL = "https://cloud.cp.jku.at/public.php/dav/files/7ik4RrBKTS273gp/final0.ckpt"
+CACHE_VERSION = "v3"
 
 NOTE_NAMES = ["C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"]
 
@@ -165,8 +168,64 @@ def _sync_beats_exact(feature: np.ndarray, beat_frames: np.ndarray) -> np.ndarra
     return synced[:, :n_beats]
 
 
-def _track_beats_librosa(y_beat: np.ndarray, sr: int, duration: float) -> tuple[float, list[float], list[float], str]:
-    """Track beats with librosa and assume 4/4 downbeats."""
+def _fill_and_align_beat_grid(
+    beat_times: list[float],
+    tempo: float,
+    duration: float,
+    y_beat: np.ndarray,
+    sr: int,
+) -> tuple[list[float], list[float], int]:
+    """Fill missing/intro/outro beats from tempo and align downbeats to strongest 4-beat phase."""
+    beat_period = 60.0 / max(tempo, 30.0)
+    expected_beats = duration * tempo / 60.0
+    sorted_beats = sorted(t for t in beat_times if 0.0 <= t < duration)
+    estimated_count = 0
+
+    if not sorted_beats:
+        grid = np.arange(0.0, duration, beat_period).tolist()
+        downbeats = [round(grid[i], 3) for i in range(0, len(grid), 4)]
+        return grid, downbeats, len(grid)
+
+    # 1. Fill internal gaps if beat_track dropped beats in quiet/bridge sections
+    filled: list[float] = [sorted_beats[0]]
+    for t in sorted_beats[1:]:
+        gap = t - filled[-1]
+        if gap > 1.45 * beat_period:
+            n_missing = max(1, int(round(gap / beat_period)) - 1)
+            step = gap / (n_missing + 1)
+            for k in range(1, n_missing + 1):
+                filled.append(filled[-1] + step)
+                estimated_count += 1
+        filled.append(t)
+
+    # 2. Extend backward from the first stable beat to cover any intro
+    while filled[0] - beat_period >= 0.05:
+        filled.insert(0, filled[0] - beat_period)
+        estimated_count += 1
+
+    # 3. Extend forward to cover the end of the song if fewer beats than expected
+    if len(filled) < expected_beats * 0.92 or filled[-1] < duration - 1.2 * beat_period:
+        while filled[-1] + beat_period < duration - 0.1:
+            filled.append(filled[-1] + beat_period)
+            estimated_count += 1
+
+    # 4. Align bar lines to the strongest 4-beat phase (fixes 1-beat intro offset)
+    onset_env = librosa.onset.onset_strength(y=y_beat, sr=sr)
+    beat_frames = np.clip(librosa.time_to_frames(np.array(filled), sr=sr), 0, max(0, len(onset_env) - 1))
+    phase_scores = [
+        float(np.mean(onset_env[beat_frames[p::4]])) if len(beat_frames[p::4]) > 0 else 0.0
+        for p in range(4)
+    ]
+    best_phase = int(np.argmax(phase_scores))
+    downbeats = [round(float(filled[i]), 3) for i in range(best_phase, len(filled), 4)]
+
+    return [float(t) for t in filled], downbeats, estimated_count
+
+
+def _track_beats_librosa(
+    y_beat: np.ndarray, sr: int, duration: float
+) -> tuple[float, list[float], list[float], str, int]:
+    """Track beats with librosa, fill missing intro/outro/gap beats, and align downbeats."""
     onset_env = librosa.onset.onset_strength(y=y_beat, sr=sr)
     tempo_est_arr = librosa.feature.tempo(onset_envelope=onset_env, sr=sr)
     start_bpm = float(np.atleast_1d(tempo_est_arr)[0]) if tempo_est_arr is not None else 120.0
@@ -184,24 +243,73 @@ def _track_beats_librosa(y_beat: np.ndarray, sr: int, duration: float) -> tuple[
     if tempo <= 0 or np.isnan(tempo):
         tempo = start_bpm
 
-    beat_times = librosa.frames_to_time(beat_frames, sr=sr).tolist()
-    if len(beat_times) < 2:
-        step = 60.0 / tempo
-        beat_times = np.arange(0.0, max(duration, step), step).tolist()
+    raw_beats = librosa.frames_to_time(beat_frames, sr=sr).tolist()
+    beat_times, downbeats, beats_estimated = _fill_and_align_beat_grid(
+        raw_beats, tempo, duration, y_beat, sr
+    )
+    return tempo, beat_times, downbeats, "4/4", beats_estimated
 
-    downbeats = [round(float(beat_times[i]), 3) for i in range(0, len(beat_times), 4)]
-    return tempo, [float(t) for t in beat_times], downbeats, "4/4"
+
+def _ensure_beat_this_checkpoint(progress_cb=None) -> Path:
+    """Return local beat_this checkpoint path, downloading with Range resume if needed."""
+    import torch
+
+    if BEAT_THIS_CKPT_PATH.exists() and BEAT_THIS_CKPT_PATH.stat().st_size > 10_000_000:
+        return BEAT_THIS_CKPT_PATH
+
+    hub_ckpt = Path(torch.hub.get_dir()) / "checkpoints" / "beat_this-final0.ckpt"
+    if hub_ckpt.exists() and hub_ckpt.stat().st_size > 10_000_000:
+        return hub_ckpt
+
+    import httpx
+
+    BEAT_THIS_CKPT_DIR.mkdir(parents=True, exist_ok=True)
+    part_path = BEAT_THIS_CKPT_DIR / "final0.ckpt.part"
+
+    if progress_cb:
+        progress_cb("Downloading beat_this checkpoint (one-time setup, ~77 MB)...")
+
+    last_err: Exception | None = None
+    for attempt in range(3):
+        existing_bytes = part_path.stat().st_size if part_path.exists() else 0
+        headers = {"Range": f"bytes={existing_bytes}-"} if existing_bytes > 0 else {}
+        try:
+            with httpx.stream(
+                "GET",
+                BEAT_THIS_CKPT_URL,
+                headers=headers,
+                timeout=httpx.Timeout(connect=20.0, read=120.0, write=30.0, pool=30.0),
+                follow_redirects=True,
+            ) as resp:
+                if resp.status_code not in (200, 206):
+                    raise RuntimeError(f"HTTP {resp.status_code} while downloading beat_this checkpoint.")
+                mode = "ab" if resp.status_code == 206 and existing_bytes > 0 else "wb"
+                with part_path.open(mode) as f:
+                    for chunk in resp.iter_bytes(chunk_size=1024 * 256):
+                        f.write(chunk)
+            if part_path.stat().st_size > 10_000_000:
+                part_path.replace(BEAT_THIS_CKPT_PATH)
+                return BEAT_THIS_CKPT_PATH
+        except Exception as exc:
+            last_err = exc
+            logger.warning("beat_this checkpoint download attempt %d failed: %s", attempt + 1, exc)
+
+    raise RuntimeError(
+        f"Could not download beat_this checkpoint ({last_err}). "
+        f"To install manually, download {BEAT_THIS_CKPT_URL} and save it to {BEAT_THIS_CKPT_PATH}"
+    )
 
 
 def _track_beats_beat_this(
-    y_beat: np.ndarray, sr: int, duration: float
+    y_beat: np.ndarray, sr: int, duration: float, progress_cb=None
 ) -> tuple[float, list[float], list[float], str]:
     """Track beats and downbeats using CPJKU beat_this on CPU."""
     global _BEAT_THIS_MODEL
     if _BEAT_THIS_MODEL is None:
         from beat_this.inference import Audio2Beats
 
-        _BEAT_THIS_MODEL = Audio2Beats(checkpoint_path="final0", device="cpu", dbn=False)
+        ckpt_path = _ensure_beat_this_checkpoint(progress_cb=progress_cb)
+        _BEAT_THIS_MODEL = Audio2Beats(checkpoint_path=str(ckpt_path), device="cpu", dbn=False)
 
     beats_arr, downbeats_arr = _BEAT_THIS_MODEL(y_beat.astype(np.float32), sr)
     beat_times = [float(t) for t in np.atleast_1d(beats_arr) if 0.0 <= t <= duration]
@@ -420,7 +528,9 @@ def analyze_audio(
             raise ValueError("The audio file appears to be empty or silent.")
         y_harm, y_perc = librosa.effects.hpss(y)
         beat_source = y_perc if np.max(np.abs(y_perc)) > 1e-4 else y
-        tempo, beat_times, downbeats, time_sig = _track_beats_librosa(beat_source, sr, duration)
+        tempo, beat_times, downbeats, time_sig, beats_estimated = _track_beats_librosa(
+            beat_source, sr, duration
+        )
         beat_chords, chords, key = _analyze_chords_phase1(y_harm, sr, beat_times, duration)
         result = {
             "duration": round(duration, 3),
@@ -429,6 +539,9 @@ def analyze_audio(
             "time_signature": time_sig,
             "beats": [round(float(t), 3) for t in beat_times],
             "downbeats": downbeats,
+            "beats_estimated": beats_estimated,
+            "beat_engine": "librosa-fallback",
+            "beat_engine_note": "Phase 1 librosa beat tracking",
             "chords": chords,
             "beat_chords": beat_chords,
             "pipeline": "phase1-librosa",
@@ -462,14 +575,21 @@ def analyze_audio(
 
     # 2. Beat & downbeat tracking (beat_this on drums, fallback to librosa)
     beat_source = drums_mono if np.max(np.abs(drums_mono)) > 1e-4 else harm_mix_mono
+    beats_estimated = 0
+    beat_engine = "beat_this"
+    beat_engine_note = ""
     try:
         tempo, beat_times, downbeats, time_sig = _track_beats_beat_this(beat_source, stem_sr, duration)
         pipeline_parts.append("beat_this")
     except Exception as exc:
         logger.warning("beat_this failed (%s); falling back to librosa beat_track.", exc)
+        beat_engine = "librosa-fallback"
+        beat_engine_note = str(exc)
         sr_bt = 22050
         bt_22k = librosa.resample(beat_source, orig_sr=stem_sr, target_sr=sr_bt) if stem_sr != sr_bt else beat_source
-        tempo, beat_times, downbeats, time_sig = _track_beats_librosa(bt_22k, sr_bt, duration)
+        tempo, beat_times, downbeats, time_sig, beats_estimated = _track_beats_librosa(
+            bt_22k, sr_bt, duration
+        )
         pipeline_parts.append("librosa-beats")
 
     # 3. Chord recognition (BTC on other+bass, fallback to Phase 1)
@@ -496,6 +616,9 @@ def analyze_audio(
         "time_signature": time_sig,
         "beats": [round(float(t), 3) for t in beat_times],
         "downbeats": downbeats,
+        "beats_estimated": beats_estimated,
+        "beat_engine": beat_engine,
+        "beat_engine_note": beat_engine_note,
         "chords": chords,
         "beat_chords": beat_chords,
         "pipeline": "+".join(pipeline_parts),
