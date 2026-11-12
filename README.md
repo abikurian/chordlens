@@ -31,6 +31,15 @@ ChordLens analyses an audio file (MP3, WAV, M4A, FLAC) or a YouTube link and gen
    pip install -r requirements.txt
    ```
 3. **`beat_this` checkpoint:** Place `final0.ckpt` in `models/beat_this/final0.ckpt` (download manually from `https://cloud.cp.jku.at/index.php/s/7ik4RrBKTS273gp` if not already present; ChordLens will not auto-download it).
+4. **JavaScript runtime for YouTube:** Install **Node.js** or **Deno** on `PATH` so `yt-dlp` can solve YouTube player extraction. If YouTube asks you to sign in or verify you are not a bot, you can optionally select your browser under **Options → YouTube cookies (personal use)** (off by default).
+
+### Update downloader
+
+YouTube changes its player format frequently. If YouTube downloads start failing, update `yt-dlp`:
+
+```bash
+.\.venv\Scripts\python.exe -m pip install -U yt-dlp
+```
 
 ## Running the App
 
@@ -39,6 +48,22 @@ ChordLens analyses an audio file (MP3, WAV, M4A, FLAC) or a YouTube link and gen
 ```
 
 Open `http://127.0.0.1:8000` in your browser.
+
+## Use on your phone
+
+1. Find your PC's local IPv4 address on the same Wi-Fi network:
+   ```powershell
+   ipconfig
+   ```
+   Look for **IPv4 Address** under your Wi-Fi adapter (for example `192.168.1.42`).
+2. Start the server bound to all interfaces:
+   ```powershell
+   .\.venv\Scripts\python.exe -m uvicorn backend.main:app --host 0.0.0.0 --port 8000
+   ```
+3. If Windows Defender Firewall prompts, allow access on your **Private** network.
+4. On your phone (connected to the same Wi-Fi), open `http://<your-pc-ip>:8000` (for example `http://192.168.1.42:8000`). You can also use **Add to Home Screen** (`frontend/manifest.json`).
+
+> **Note:** Only bind to `0.0.0.0` on a trusted home or rehearsal Wi-Fi network, not on public Wi-Fi.
 
 ## Transpose and Capo
 

@@ -1,0 +1,15 @@
+{
+  "name": "ChordLens",
+  "short_name": "ChordLens",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f2f5f4",
+  "theme_color": "#0f766e",
+  "icons": [
+    {
+      "src": "/logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

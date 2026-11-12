@@ -11,7 +11,10 @@ const inputView = document.getElementById("input-view");
 const uploadForm = document.getElementById("upload-form");
 const urlForm = document.getElementById("url-form");
 const audioFileInput = document.getElementById("audio-file");
+const selectedFileNameEl = document.getElementById("selected-file-name");
 const youtubeUrlInput = document.getElementById("youtube-url");
+const pasteUrlBtn = document.getElementById("paste-url-btn");
+const ytCookiesSelect = document.getElementById("yt-cookies-select");
 const uploadBtn = document.getElementById("upload-btn");
 const urlBtn = document.getElementById("url-btn");
 const inputOptionsBtn = document.getElementById("input-options-btn");
@@ -31,7 +34,9 @@ const nowPlayingCountdownEl = document.getElementById("now-playing-countdown");
 const npBeatDots = Array.from(document.querySelectorAll("#np-beat-dots .beat-dot"));
 const npBarProgress = document.getElementById("np-bar-progress");
 const npTimeReadout = document.getElementById("np-time-readout");
+const npPrevBarBtn = document.getElementById("np-prev-bar-btn");
 const npPlayBtn = document.getElementById("np-play-btn");
+const npNextBarBtn = document.getElementById("np-next-bar-btn");
 const npSeekSlider = document.getElementById("np-seek-slider");
 const jumpToBarBtn = document.getElementById("jump-to-bar-btn");
 
@@ -1067,11 +1072,65 @@ popoverCloseBtn.addEventListener("click", () => {
   chordPopover.hidden = true;
 });
 
+npPrevBarBtn.addEventListener("click", () => jumpByBars(-1));
+npNextBarBtn.addEventListener("click", () => jumpByBars(1));
+
 npPlayBtn.addEventListener("click", () => {
   if (audioPlayer.paused) {
     audioPlayer.play().catch(() => {});
   } else {
     audioPlayer.pause();
+  }
+});
+
+// Swipe down to close Settings bottom sheet on touch devices
+let drawerTouchStartY = null;
+settingsDrawer.addEventListener("touchstart", (event) => {
+  if (settingsDrawer.scrollTop <= 0 && event.touches.length === 1) {
+    drawerTouchStartY = event.touches[0].clientY;
+  } else {
+    drawerTouchStartY = null;
+  }
+}, { passive: true });
+settingsDrawer.addEventListener("touchend", (event) => {
+  if (drawerTouchStartY !== null && event.changedTouches.length === 1) {
+    const deltaY = event.changedTouches[0].clientY - drawerTouchStartY;
+    if (deltaY > 70) {
+      closeSettingsDrawer();
+    }
+  }
+  drawerTouchStartY = null;
+}, { passive: true });
+
+audioFileInput.addEventListener("change", () => {
+  const file = audioFileInput.files[0];
+  if (file) {
+    selectedFileNameEl.textContent = `Selected: ${file.name}`;
+    selectedFileNameEl.hidden = false;
+  } else {
+    selectedFileNameEl.textContent = "";
+    selectedFileNameEl.hidden = true;
+  }
+});
+
+pasteUrlBtn.addEventListener("click", async () => {
+  if (!navigator.clipboard || !navigator.clipboard.readText) {
+    youtubeUrlInput.focus();
+    setStatus("Clipboard paste is not available here. Tap the link box and paste manually.", "info");
+    return;
+  }
+  try {
+    const text = await navigator.clipboard.readText();
+    if (text && text.trim()) {
+      youtubeUrlInput.value = text.trim();
+      clearStatus();
+    } else {
+      youtubeUrlInput.focus();
+      setStatus("Clipboard is empty. Copy a YouTube link first.", "info");
+    }
+  } catch {
+    youtubeUrlInput.focus();
+    setStatus("Clipboard access was blocked. Tap the link box and paste manually.", "info");
   }
 });
 
@@ -1234,6 +1293,7 @@ urlForm.addEventListener("submit", async (event) => {
   }
 
   const mode = getSelectedMode();
+  const cookiesBrowser = ytCookiesSelect ? (ytCookiesSelect.value || null) : null;
   clearStatus();
   setLoading(true, `Analyzing YouTube link (${mode} mode)...`);
 
@@ -1241,7 +1301,7 @@ urlForm.addEventListener("submit", async (event) => {
     const res = await fetch("/api/jobs/analyze-url", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url, mode }),
+      body: JSON.stringify({ url, mode, cookies_browser: cookiesBrowser }),
     });
     const startData = await res.json();
     if (!res.ok) {

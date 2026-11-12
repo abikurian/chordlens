@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import mimetypes
 import uuid
 from concurrent.futures import ThreadPoolExecutor
@@ -14,12 +16,14 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from backend.analyze import analyze_audio
-from backend.youtube import download_youtube_audio
+from backend.youtube import download_youtube_audio, normalize_youtube_url
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 FRONTEND_DIR = BASE_DIR / "frontend"
 UPLOAD_DIR = BASE_DIR / "tmp" / "uploads"
+CACHE_YT_DIR = BASE_DIR / "cache" / "youtube"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+CACHE_YT_DIR.mkdir(parents=True, exist_ok=True)
 
 ALLOWED_EXTENSIONS = {".mp3", ".wav", ".m4a", ".flac"}
 EXECUTOR = ThreadPoolExecutor(max_workers=2)
@@ -40,16 +44,48 @@ async def add_no_cache_headers(request: Request, call_next):
 class AnalyzeUrlRequest(BaseModel):
     url: str
     mode: str = "fast"
+    cookies_browser: str | None = None
 
 
 def _find_audio_file(audio_id: str) -> Path | None:
-    # Prevent path traversal by allowing only hex UUID characters
+    # Prevent path traversal by allowing only alphanumeric characters
     if not audio_id.isalnum():
         return None
-    for candidate in UPLOAD_DIR.glob(f"{audio_id}.*"):
-        if candidate.is_file():
-            return candidate
+    for directory in (UPLOAD_DIR, CACHE_YT_DIR):
+        for candidate in directory.glob(f"{audio_id}.*"):
+            if candidate.is_file() and candidate.suffix.lower() != ".json":
+                return candidate
     return None
+
+
+def _get_or_download_youtube(
+    url: str,
+    cookies_browser: str | None = None,
+) -> tuple[str, Path, str]:
+    clean_url = normalize_youtube_url(url)
+    url_hash = hashlib.sha256(clean_url.encode("utf-8")).hexdigest()[:24]
+    audio_id = f"yt{url_hash}"
+    meta_path = CACHE_YT_DIR / f"{audio_id}.json"
+    cached_audio = _find_audio_file(audio_id)
+
+    if cached_audio is not None and meta_path.exists():
+        try:
+            meta = json.loads(meta_path.read_text(encoding="utf-8"))
+            return audio_id, cached_audio, str(meta.get("title") or "YouTube Audio")
+        except Exception:
+            pass
+
+    audio_path, title = download_youtube_audio(
+        clean_url,
+        CACHE_YT_DIR,
+        audio_id,
+        cookies_browser=cookies_browser,
+    )
+    meta_path.write_text(
+        json.dumps({"title": title, "url": clean_url}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    return audio_id, audio_path, title
 
 
 @app.get("/favicon.ico", include_in_schema=False)
@@ -108,9 +144,11 @@ async def analyze_upload(
 
 @app.post("/api/analyze-url")
 def analyze_url(payload: AnalyzeUrlRequest) -> dict:
-    audio_id = uuid.uuid4().hex
     try:
-        audio_path, title = download_youtube_audio(payload.url, UPLOAD_DIR, audio_id)
+        audio_id, audio_path, title = _get_or_download_youtube(
+            payload.url,
+            cookies_browser=payload.cookies_browser,
+        )
         result = analyze_audio(audio_path, mode=payload.mode)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -150,13 +188,21 @@ def _run_file_job(job_id: str, audio_id: str, dest: Path, title: str, mode: str)
         JOBS[job_id]["error"] = str(exc)
 
 
-def _run_url_job(job_id: str, audio_id: str, url: str, mode: str) -> None:
+def _run_url_job(
+    job_id: str,
+    url: str,
+    mode: str,
+    cookies_browser: str | None = None,
+) -> None:
     def on_progress(stage: str) -> None:
         JOBS[job_id]["stage"] = stage
 
     try:
         JOBS[job_id]["stage"] = "Downloading audio from YouTube..."
-        audio_path, title = download_youtube_audio(url, UPLOAD_DIR, audio_id)
+        audio_id, audio_path, title = _get_or_download_youtube(
+            url,
+            cookies_browser=cookies_browser,
+        )
         result = analyze_audio(audio_path, mode=mode, progress_cb=on_progress)
         JOBS[job_id]["status"] = "done"
         JOBS[job_id]["stage"] = "Done"
@@ -202,10 +248,9 @@ async def start_analyze_job(
 
 @app.post("/api/jobs/analyze-url")
 def start_analyze_url_job(payload: AnalyzeUrlRequest) -> dict[str, str]:
-    audio_id = uuid.uuid4().hex
     job_id = uuid.uuid4().hex
     JOBS[job_id] = {"status": "running", "stage": "Queued...", "result": None, "error": None}
-    EXECUTOR.submit(_run_url_job, job_id, audio_id, payload.url, payload.mode)
+    EXECUTOR.submit(_run_url_job, job_id, payload.url, payload.mode, payload.cookies_browser)
     return {"job_id": job_id}
 
 
