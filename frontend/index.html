@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ChordLens — Audio Chord &amp; Beat Analysis</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap"
+    rel="stylesheet"
+  />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <svg class="brand-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <rect x="3" y="10" width="3" height="8" rx="1" fill="currentColor" />
+          <rect x="8.5" y="5" width="3" height="14" rx="1" fill="currentColor" />
+          <rect x="14" y="8" width="3" height="11" rx="1" fill="currentColor" />
+          <rect x="19.5" y="4" width="1.5" height="16" rx="0.75" fill="#0F766E" />
+        </svg>
+        <span class="brand-name">ChordLens</span>
+      </div>
+      <p class="topbar-note">Lead-sheet chord, beat, tempo, and key analysis</p>
+    </div>
+  </header>
+
+  <main class="workspace">
+    <aside class="control-rail" aria-label="Audio input and playback">
+      <section class="panel">
+        <h1 class="panel-title">Analyze a track</h1>
+        <p class="panel-desc">Upload an audio file or paste a YouTube link to generate a 4-beat lead sheet.</p>
+
+        <form id="upload-form" class="input-group">
+          <label for="audio-file" class="field-label">Audio file (MP3, WAV, M4A, FLAC)</label>
+          <input
+            id="audio-file"
+            name="file"
+            type="file"
+            accept=".mp3,.wav,.m4a,.flac,audio/*"
+            class="file-input"
+            required
+          />
+          <button type="submit" id="upload-btn" class="btn btn-primary">
+            Analyze audio file
+          </button>
+        </form>
+
+        <div class="divider" role="separator"><span>or</span></div>
+
+        <form id="url-form" class="input-group">
+          <label for="youtube-url" class="field-label">YouTube link</label>
+          <input
+            id="youtube-url"
+            name="url"
+            type="url"
+            placeholder="https://www.youtube.com/watch?v=..."
+            class="text-input"
+            required
+          />
+          <button type="submit" id="url-btn" class="btn btn-secondary">
+            Analyze YouTube link
+          </button>
+        </form>
+
+        <div id="status-banner" class="status-banner" role="status" aria-live="polite" hidden></div>
+      </section>
+
+      <section id="player-panel" class="panel" hidden>
+        <div class="player-header">
+          <h2 id="track-title" class="track-title">Untitled track</h2>
+          <span id="pipeline-badge" class="pipeline-tag"></span>
+        </div>
+
+        <audio id="audio-player" controls class="audio-player" preload="metadata"></audio>
+
+        <dl class="meta-grid">
+          <div class="meta-item">
+            <dt>Key</dt>
+            <dd id="meta-key">—</dd>
+          </div>
+          <div class="meta-item">
+            <dt>Tempo</dt>
+            <dd id="meta-tempo">—</dd>
+          </div>
+          <div class="meta-item">
+            <dt>Time</dt>
+            <dd id="meta-time">—</dd>
+          </div>
+          <div class="meta-item">
+            <dt>Length</dt>
+            <dd id="meta-duration">—</dd>
+          </div>
+        </dl>
+      </section>
+    </aside>
+
+    <section class="chart-stage" aria-label="Lead-sheet chord chart">
+      <div class="chart-header">
+        <div>
+          <h2 class="chart-title">Lead sheet</h2>
+          <p id="chart-subtitle" class="chart-subtitle">
+            Upload a track or paste a YouTube URL to view bars and chords.
+          </p>
+        </div>
+        <div class="chart-legend" aria-label="Chart legend">
+          <span class="legend-item">
+            <span class="legend-swatch swatch-active" aria-hidden="true"></span>
+            Playing
+          </span>
+          <span class="legend-item">
+            <span class="legend-swatch swatch-low" aria-hidden="true"></span>
+            Low confidence (&lt;55%)
+          </span>
+        </div>
+      </div>
+
+      <div id="chart-empty" class="chart-empty">
+        <p class="empty-heading">Ready for a song</p>
+        <p class="empty-copy">
+          Bars are grouped 4 beats per measure. Once analyzed, click any bar to jump the audio player to that beat.
+        </p>
+      </div>
+
+      <div id="lead-sheet" class="lead-sheet" hidden></div>
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>
+

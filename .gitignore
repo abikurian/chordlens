@@ -1,0 +1,40 @@
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+
+# Media, uploads, temp files, and analysis cache
+tmp/
+uploads/
+cache/
+*.mp3
+*.wav
+*.m4a
+*.flac
+*.ogg
+*.webm
+*.mp4
+
+# Model weights
+models/
+weights/
+checkpoints/
+*.pt
+*.pth
+*.onnx
+*.ckpt
+
+# Environment and IDE
+.env
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
