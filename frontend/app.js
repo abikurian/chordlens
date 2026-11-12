@@ -18,6 +18,7 @@ const metaBeatEngineEl = document.getElementById("meta-beat-engine");
 
 const chartSubtitle = document.getElementById("chart-subtitle");
 const chartEmpty = document.getElementById("chart-empty");
+const sectionStripEl = document.getElementById("section-strip");
 const leadSheetEl = document.getElementById("lead-sheet");
 const chartToolbar = document.getElementById("chart-toolbar");
 const editModeBtn = document.getElementById("edit-mode-btn");
@@ -27,6 +28,7 @@ const exportTxtBtn = document.getElementById("export-txt-btn");
 let currentAnalysis = null;
 let beatNodes = [];
 let barNodes = [];
+let sectionNodes = [];
 let rafId = null;
 let isEditMode = false;
 
@@ -91,6 +93,33 @@ function renderAnalysis(data) {
 
   beatNodes = [];
   barNodes = [];
+  sectionNodes = [];
+
+  const sections = data.sections || [];
+  sectionStripEl.innerHTML = "";
+  if (sections.length > 0) {
+    sectionStripEl.hidden = false;
+    for (const sec of sections) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "section-band";
+      btn.innerHTML = `
+        <span class="section-band-title">${sec.label} (estimated)</span>
+        <span class="section-band-meta">Bars ${sec.bar_start}–${sec.bar_end} · ${formatTime(sec.start)}</span>
+      `;
+      btn.addEventListener("click", () => {
+        audioPlayer.currentTime = sec.start;
+        if (audioPlayer.paused) {
+          audioPlayer.play().catch(() => {});
+        }
+        updatePlayhead();
+      });
+      sectionNodes.push({ btn, sec });
+      sectionStripEl.appendChild(btn);
+    }
+  } else {
+    sectionStripEl.hidden = true;
+  }
 
   for (let barIdx = 0; barIdx < totalBars; barIdx += 1) {
     const startBeatIdx = barIdx * beatsPerBar;
@@ -252,11 +281,25 @@ function formatChordSheetText(data) {
     "",
   ];
   const beats = data.beat_chords || [];
+  const sections = data.sections || [];
+  const sectionByStartBar = new Map();
+  for (const sec of sections) {
+    sectionByStartBar.set(sec.bar_start - 1, `${sec.label} (estimated)`);
+  }
+
   const beatsPerBar = 4;
   const totalBars = Math.ceil(beats.length / beatsPerBar);
   let row = [];
 
   for (let b = 0; b < totalBars; b += 1) {
+    if (sectionByStartBar.has(b)) {
+      if (row.length > 0) {
+        lines.push(row.join("") + "|");
+        row = [];
+      }
+      if (lines[lines.length - 1] !== "") lines.push("");
+      lines.push(`[${sectionByStartBar.get(b)}]`);
+    }
     const barBeats = beats.slice(b * beatsPerBar, (b + 1) * beatsPerBar);
     const tokens = barBeats.map((item, idx) => {
       const prev = item.beat_index > 0 ? beats[item.beat_index - 1] : null;
@@ -321,6 +364,11 @@ function updatePlayhead() {
     if (barNodes[barIdx]) {
       barNodes[barIdx].classList.add("is-active");
     }
+  }
+
+  for (const node of sectionNodes) {
+    const active = t >= node.sec.start && t < node.sec.end;
+    node.btn.classList.toggle("is-active", active);
   }
 }
 

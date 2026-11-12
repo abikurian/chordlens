@@ -502,6 +502,149 @@ def _analyze_chords_phase1(
     return beat_chords, chords, global_key
 
 
+def detect_sections(
+    y_harm: np.ndarray,
+    sr: int,
+    beat_times: list[float],
+    duration: float,
+) -> list[dict[str, Any]]:
+    """Estimate rough song sections (Intro, Verse, Chorus, Bridge, Outro) from bar chroma & energy."""
+    if len(beat_times) < 8:
+        return [
+            {
+                "label": "Main",
+                "bar_start": 1,
+                "bar_end": max(1, (len(beat_times) + 3) // 4),
+                "start": round(float(beat_times[0]) if beat_times else 0.0, 3),
+                "end": round(duration, 3),
+                "estimated": True,
+            }
+        ]
+
+    if sr != 22050:
+        y_22k = librosa.resample(y_harm, orig_sr=sr, target_sr=22050)
+        sr = 22050
+    else:
+        y_22k = y_harm
+
+    beat_frames = librosa.time_to_frames(np.array(beat_times), sr=sr)
+    chroma = librosa.feature.chroma_cqt(y=y_22k, sr=sr, bins_per_octave=24)
+    rms = librosa.feature.rms(y=y_22k)
+
+    beat_chroma = _sync_beats_exact(chroma, beat_frames)
+    beat_rms = _sync_beats_exact(rms, beat_frames).squeeze(0)
+
+    n_beats = min(len(beat_times), beat_chroma.shape[1])
+    n_bars = n_beats // 4
+    if n_bars < 4:
+        return [
+            {
+                "label": "Main",
+                "bar_start": 1,
+                "bar_end": max(1, n_bars),
+                "start": round(float(beat_times[0]), 3),
+                "end": round(duration, 3),
+                "estimated": True,
+            }
+        ]
+
+    # Aggregate 4-beat bars
+    bar_chroma = np.array(
+        [np.mean(beat_chroma[:, b * 4 : (b + 1) * 4], axis=1) for b in range(n_bars)]
+    )  # [n_bars, 12]
+    bar_energy = np.array(
+        [float(np.mean(beat_rms[b * 4 : (b + 1) * 4])) for b in range(n_bars)]
+    )
+    norms = np.linalg.norm(bar_chroma, axis=1, keepdims=True)
+    bar_chroma_norm = bar_chroma / np.where(norms > 1e-8, norms, 1.0)
+
+    # Bar-to-bar self-similarity + novelty curve (4-bar checkerboard window)
+    sim = bar_chroma_norm @ bar_chroma_norm.T
+    half = min(4, max(2, n_bars // 6))
+    novelty = np.zeros(n_bars, dtype=np.float64)
+    for i in range(half, n_bars - half):
+        same_prev = float(np.mean(sim[i - half : i, i - half : i]))
+        same_next = float(np.mean(sim[i : i + half, i : i + half]))
+        cross = float(np.mean(sim[i - half : i, i : i + half]))
+        e_diff = abs(float(np.mean(bar_energy[i : i + half])) - float(np.mean(bar_energy[i - half : i])))
+        e_scale = float(np.median(bar_energy)) + 1e-8
+        novelty[i] = max(0.0, 0.5 * (same_prev + same_next) - cross) + 0.35 * (e_diff / e_scale)
+
+    # Pick boundary peaks with minimum 4-bar spacing (preferring 4-bar phrasing)
+    boundaries = [0]
+    min_len = 4
+    thresh = float(np.mean(novelty) + 0.45 * np.std(novelty))
+    for i in range(min_len, n_bars - min_len + 1):
+        if novelty[i] >= thresh and novelty[i] >= novelty[i - 1] and novelty[i] >= novelty[i + 1]:
+            if i - boundaries[-1] >= min_len:
+                boundaries.append(i)
+    if n_bars - boundaries[-1] < min_len and len(boundaries) > 1:
+        boundaries[-1] = n_bars
+    else:
+        boundaries.append(n_bars)
+
+    # Compute per-section mean chroma & energy
+    raw_secs: list[dict[str, Any]] = []
+    for s_idx in range(len(boundaries) - 1):
+        b0, b1 = boundaries[s_idx], boundaries[s_idx + 1]
+        vec = np.mean(bar_chroma_norm[b0:b1], axis=0)
+        vec /= np.linalg.norm(vec) + 1e-8
+        raw_secs.append(
+            {
+                "b0": b0,
+                "b1": b1,
+                "energy": float(np.mean(bar_energy[b0:b1])),
+                "vec": vec,
+            }
+        )
+
+    med_energy = float(np.median([s["energy"] for s in raw_secs]))
+    n_sec = len(raw_secs)
+    labels: list[str] = ["Verse"] * n_sec
+
+    if n_sec >= 3 and raw_secs[0]["b1"] - raw_secs[0]["b0"] <= 8 and raw_secs[0]["energy"] <= med_energy * 1.05:
+        labels[0] = "Intro"
+    if n_sec >= 3 and raw_secs[-1]["b1"] - raw_secs[-1]["b0"] <= 8 and raw_secs[-1]["energy"] <= med_energy * 1.05:
+        labels[-1] = "Outro"
+
+    mid_indices = [i for i in range(n_sec) if labels[i] not in {"Intro", "Outro"}]
+    if mid_indices:
+        # Higher-energy middle sections become Chorus; lower-energy repeating become Verse; unique contrast becomes Bridge
+        max_e = max(raw_secs[i]["energy"] for i in mid_indices)
+        min_e = min(raw_secs[i]["energy"] for i in mid_indices)
+        e_mid = 0.5 * (max_e + min_e)
+        for i in mid_indices:
+            if raw_secs[i]["energy"] >= e_mid and max_e > min_e * 1.08:
+                labels[i] = "Chorus"
+            else:
+                labels[i] = "Verse"
+        # Check for a contrasting middle section (Bridge) if >= 4 middle sections
+        if len(mid_indices) >= 4:
+            for i in mid_indices[1:-1]:
+                sims = [float(np.dot(raw_secs[i]["vec"], raw_secs[j]["vec"])) for j in mid_indices if j != i]
+                if max(sims) < 0.86:
+                    labels[i] = "Bridge"
+                    break
+
+    sections: list[dict[str, Any]] = []
+    for i, sec in enumerate(raw_secs):
+        b0, b1 = sec["b0"], sec["b1"]
+        start_t = float(beat_times[b0 * 4])
+        end_t = float(beat_times[b1 * 4]) if b1 * 4 < len(beat_times) else duration
+        sections.append(
+            {
+                "label": labels[i],
+                "bar_start": b0 + 1,
+                "bar_end": b1,
+                "start": round(start_t, 3),
+                "end": round(max(end_t, start_t), 3),
+                "estimated": True,
+            }
+        )
+
+    return sections
+
+
 def analyze_audio(
     file_path: str | Path,
     use_phase2: bool = True,
@@ -537,6 +680,7 @@ def analyze_audio(
             beat_source, sr, duration
         )
         beat_chords, chords, key = _analyze_chords_phase1(y_harm, sr, beat_times, duration)
+        sections = detect_sections(y_harm, sr, beat_times, duration)
         result = {
             "duration": round(duration, 3),
             "tempo": round(tempo, 1),
@@ -549,6 +693,7 @@ def analyze_audio(
             "beat_engine_note": "Phase 1 librosa beat tracking",
             "chords": chords,
             "beat_chords": beat_chords,
+            "sections": sections,
             "pipeline": "phase1-librosa",
             "cached": False,
         }
@@ -636,6 +781,10 @@ def analyze_audio(
     chroma_for_key = librosa.feature.chroma_cqt(y=harm_22k, sr=22050, tuning=tuning, bins_per_octave=36)
     key = detect_key_krumhansl(np.mean(chroma_for_key, axis=1))
 
+    if progress_cb:
+        progress_cb("Estimating song sections...")
+    sections = detect_sections(harm_22k, 22050, beat_times, duration)
+
     result = {
         "duration": round(duration, 3),
         "tempo": round(tempo, 1),
@@ -648,6 +797,7 @@ def analyze_audio(
         "beat_engine_note": beat_engine_note,
         "chords": chords,
         "beat_chords": beat_chords,
+        "sections": sections,
         "pipeline": "+".join(pipeline_parts),
         "mode": clean_mode,
         "cached": False,

@@ -498,6 +498,55 @@ body {
   font-size: 0.95rem;
 }
 
+/* Estimated section bands */
+.section-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.section-band {
+  appearance: none;
+  min-height: 44px;
+  padding: 0.4rem 0.75rem;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.1rem;
+  transition: border-color 0.12s ease, background-color 0.12s ease;
+}
+
+.section-band:hover {
+  background: var(--surface-muted);
+}
+
+.section-band.is-active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.section-band-title {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 0.9rem;
+  line-height: 1.2;
+}
+
+.section-band-meta {
+  font-size: 0.75rem;
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+
 /* 4-beat-per-bar grid */
 .lead-sheet {
   display: grid;
@@ -617,7 +666,8 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .btn,
   .bar-card,
-  .beat-cell {
+  .beat-cell,
+  .section-band {
     transition: none;
   }
 }

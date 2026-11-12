@@ -64,6 +64,21 @@ Open `http://127.0.0.1:8000` in your browser.
 3. **Add real ground-truth charts:**
    - Copy `backend/tests/ground_truth/template.json` to add bar-by-bar ground-truth chord charts (`bar`, `chord`) for real songs you own.
 
+## Credits and Licences
+
+| Component | Source | Code Licence | Weights / Data Notes | Personal & Public Use |
+| --- | --- | --- | --- | --- |
+| **BTC Chord Model** | [puar-playground/btc-chord](https://huggingface.co/puar-playground/btc-chord) (packaging [jayg996/BTC-ISMIR19](https://github.com/jayg996/BTC-ISMIR19)) | MIT | Weights (`btc_model_large_voca.pt`) released under MIT; trained on MIR datasets (Isophonics, Billboard, Robbie Williams) | Personal and public/commercial code & weights allowed under MIT; check dataset terms if redistributing derived benchmarks |
+| **Demucs (`htdemucs`)** | [facebookresearch/demucs](https://github.com/facebookresearch/demucs) | MIT | Pretrained `htdemucs` weights were trained on MUSDB18-HQ (non-commercial / research audio) | Personal use OK; **public/commercial use of pretrained `htdemucs` weights is restricted** by MUSDB18-HQ terms |
+| **beat_this** | [CPJKU/beat_this](https://github.com/CPJKU/beat_this) | MIT | Published `final0.ckpt` weights released under MIT; authors note training files include copyrighted/CC audio | Personal and public use allowed under MIT; review authors' dataset notice for commercial deployments |
+| **librosa** | [librosa/librosa](https://github.com/librosa/librosa) | ISC | N/A | Personal and public/commercial use allowed |
+| **yt-dlp** | [yt-dlp/yt-dlp](https://github.com/yt-dlp/yt-dlp) | Unlicense (Public Domain) | N/A | Personal and public use allowed; subject to YouTube Terms of Service and local copyright law |
+| **PyTorch & torchaudio** | [pytorch/pytorch](https://github.com/pytorch/pytorch) | BSD-3-Clause | N/A | Personal and public/commercial use allowed |
+| **FastAPI / pytest** | [fastapi/fastapi](https://github.com/fastapi/fastapi), [pytest-dev/pytest](https://github.com/pytest-dev/pytest) | MIT | N/A | Personal and public/commercial use allowed |
+| **uvicorn / numpy / scipy / soundfile / httpx** | PyPI | BSD-3-Clause | N/A | Personal and public/commercial use allowed |
+| **python-multipart / huggingface-hub** | PyPI | Apache-2.0 | N/A | Personal and public/commercial use allowed |
+| **ffmpeg** *(external binary)* | [ffmpeg.org](https://ffmpeg.org/) | LGPL v2.1+ or GPL v2+/v3+ | Windows `gyan.dev` `full_build` is GPL v3 | Personal use OK; if bundling `ffmpeg` in a public release, verify LGPL vs GPL build terms |
+
 ## Notice
 
 YouTube downloading via `yt-dlp` is intended strictly for personal use with audio you have the right to analyze.
