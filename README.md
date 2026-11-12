@@ -106,6 +106,59 @@ A slim **Key** strip directly below **Now playing** lets you transpose chords (`
   - Phase 1 (`librosa`): `20.84s`, average model confidence `0.441 / 0.449 / 0.473` (`275/426` low-confidence beats).
   - Phase 2 (`demucs + librosa-beats + btc`): `676.07s` first run on CPU (`0.023s` cached), average model confidence `0.780 / 0.717 / 0.709` (`84/388` low-confidence beats).
 
+## Windows Installation & Releases
+
+Pre-built Windows packages are available on the [Releases](https://github.com/abikurian/chordlens/releases) page:
+
+1. **Download the installer or portable zip:**
+   - **Installer:** `ChordLens-Setup-0.1.0.exe` (per-user install into `%LOCALAPPDATA%\Programs\ChordLens`, no admin rights needed, adds Start menu shortcut and optional desktop icon).
+   - **Portable zip:** `ChordLens-v0.1.0-windows-x64.zip` (extract anywhere and run `ChordLens.exe`).
+2. **Windows SmartScreen note:**
+   - Because open-source binaries are not code-signed with an expensive EV certificate, Windows SmartScreen may show *"Windows protected your PC"*.
+   - Click **More info** &rarr; **Run anyway**.
+   - To verify file integrity before running, compare the SHA-256 hash against `checksums.txt` in PowerShell:
+     ```powershell
+     Get-FileHash -Path .\ChordLens-Setup-0.1.0.exe -Algorithm SHA256
+     ```
+3. **Where data is stored:**
+   - All writable data (cache, downloaded audio, on-demand model weights, logs) is stored in:
+     ```
+     %LOCALAPPDATA%\ChordLens
+     ```
+   - Nothing is written to `Program Files` or next to the executable. You can click **Open data folder** or **Clear cache** in the in-app **Settings &rarr; About** panel anytime.
+4. **How to uninstall:**
+   - Open **Windows Settings &rarr; Apps &rarr; Installed apps**, find **ChordLens**, and click **Uninstall** (or run the uninstaller from the Start menu).
+   - The uninstaller cleanly removes the application files. To also remove cached audio and model weights, delete `%LOCALAPPDATA%\ChordLens`.
+
+## Building From Source & Releasing
+
+### Build Requirements
+- Python 3.11 x64
+- PowerShell 7 or Windows PowerShell 5.1
+- Inno Setup 6 (optional, needed to compile the installer; install with `winget install JRSoftware.InnoSetup`)
+- Edge WebView2 Runtime (pre-installed on Windows 10/11)
+
+### Build Steps
+```powershell
+# 1. Install dependencies
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe -m pip install pyinstaller pywebview
+
+# 2. Run build pipeline
+.\build.ps1
+```
+This produces:
+- `dist\ChordLens\` (portable folder)
+- `dist\portable\ChordLens-v<version>-windows-x64.zip`
+- `dist\installer\ChordLens-Setup-<version>.exe`
+
+### Release Pipeline
+To release a new version:
+```powershell
+# Auto-bumps version, builds, generates checksums, and creates a draft release if gh is installed
+.\release.ps1 -Bump patch
+```
+
 ## How to Verify
 
 1. **Automated unit & synthetic tests:**
@@ -133,7 +186,11 @@ A slim **Key** strip directly below **Now playing** lets you transpose chords (`
 | **uvicorn / numpy / scipy / soundfile / httpx** | PyPI | BSD-3-Clause | N/A | Personal and public/commercial use allowed |
 | **python-multipart / huggingface-hub** | PyPI | Apache-2.0 | N/A | Personal and public/commercial use allowed |
 | **Guitar Chord Shapes** | `frontend/chordShapes.js` (own table, standard tuning) | MIT (this repo) | N/A | Personal and public/commercial use allowed |
-| **ffmpeg** *(external binary)* | [ffmpeg.org](https://ffmpeg.org/) | LGPL v2.1+ or GPL v2+/v3+ | Windows `gyan.dev` `full_build` is GPL v3 | Personal use OK; if bundling `ffmpeg` in a public release, verify LGPL vs GPL build terms |
+| **PyInstaller** | [pyinstaller/pyinstaller](https://github.com/pyinstaller/pyinstaller) | GPL-2.0-or-later with PyInstaller exception | Built binaries are not subject to GPL terms under the PyInstaller special exception | Personal and public use allowed |
+| **pywebview** | [r0x0r/pywebview](https://github.com/r0x0r/pywebview) | BSD-3-Clause | Uses system WebView2 runtime (Edge) | Personal and public/commercial use allowed |
+| **Inno Setup** | [jrsoftware/issrc](https://github.com/jrsoftware/issrc) | Inno Setup Licence (BSD-style permissive) | N/A | Personal and public/commercial use allowed |
+| **Playwright** *(dev-only)* | [microsoft/playwright-python](https://github.com/microsoft/playwright-python) | Apache-2.0 | Dev/testing fixture screenshot tool only, not bundled in app | Personal and public use allowed |
+| **ffmpeg** *(external binary)* | [ffmpeg.org](https://ffmpeg.org/) | LGPL v2.1+ or GPL v2+/v3+ | Windows `gyan.dev` `full_build` is GPL v3; ChordLens does **not** bundle GPL binaries in the installer and detects system ffmpeg or downloads on-demand | Personal use OK; if bundling `ffmpeg` in a public release, verify LGPL vs GPL build terms |
 
 ## Notice
 
