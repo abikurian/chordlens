@@ -41,6 +41,9 @@ def _setup_logging():
 
 _log_fh, _log_path = _setup_logging()
 
+_orig_stdout = sys.stdout
+_orig_stderr = sys.stderr
+
 
 def _log(msg: str):
     import datetime
@@ -51,10 +54,11 @@ def _log(msg: str):
         _log_fh.flush()
     except Exception:
         pass
-    # Also print if stdout is available
-    if sys.stdout is not None:
+    # Only write to original console stdout if it existed and is NOT our _LogWriter
+    if _orig_stdout is not None and not isinstance(_orig_stdout, _LogWriter):
         try:
-            print(line, end="", flush=True)
+            _orig_stdout.write(line)
+            _orig_stdout.flush()
         except Exception:
             pass
 
@@ -66,7 +70,10 @@ class _LogWriter:
 
     def write(self, msg: str):
         if msg and msg.strip():
-            _log(f"[{self._label}] {msg.rstrip()}")
+            for line in msg.splitlines():
+                clean = line.strip()
+                if clean:
+                    _log(f"[{self._label}] {clean}")
 
     def flush(self):
         try:
@@ -265,9 +272,38 @@ def main():
             min_size=(360, 500),
             background_color="#F2F5F4",
         )
+        def on_closed():
+            _log("Window closed event received — exiting cleanly")
+            try:
+                if hasattr(acquire_single_instance_mutex, "_handle") and acquire_single_instance_mutex._handle:
+                    import ctypes
+                    ctypes.windll.kernel32.CloseHandle(acquire_single_instance_mutex._handle)
+            except Exception:
+                pass
+            os._exit(0)
+
+        window.events.closed += on_closed
+
+        # Optional test parameter: --test-close-after=SECONDS
+        for arg in sys.argv[1:]:
+            if arg.startswith("--test-close-after="):
+                try:
+                    delay = float(arg.split("=", 1)[1])
+                    def _closer():
+                        time.sleep(delay)
+                        _log(f"Auto-closing window after {delay}s test delay")
+                        try:
+                            window.destroy()
+                        except Exception:
+                            on_closed()
+                    threading.Thread(target=_closer, daemon=True).start()
+                except Exception:
+                    pass
+
         _log("WebView window created, starting event loop (edgechromium)")
         webview.start(gui="edgechromium", icon=str(ico_path) if ico_path.exists() else None)
         _log("WebView event loop exited normally")
+        on_closed()
     except Exception as exc:
         tb = traceback.format_exc()
         _log(f"Native WebView2 could not start:\n{tb}\nFalling back to default browser.")
