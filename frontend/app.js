@@ -34,6 +34,10 @@ const npCurrentDiagram = document.getElementById("np-current-diagram");
 const npNextBtn = document.getElementById("np-next-btn");
 const nowPlayingNextChordEl = document.getElementById("now-playing-next-chord");
 const nowPlayingCountdownEl = document.getElementById("now-playing-countdown");
+const npNextDiagram = document.getElementById("np-next-diagram");
+const chordLaneViewport = document.getElementById("chord-lane-viewport");
+const lanePlayhead = document.getElementById("lane-playhead");
+const chordLaneTrack = document.getElementById("chord-lane-track");
 const npBeatDots = Array.from(document.querySelectorAll("#np-beat-dots .beat-dot"));
 const npBarProgress = document.getElementById("np-bar-progress");
 const npTimeReadout = document.getElementById("np-time-readout");
@@ -129,6 +133,14 @@ let preferredShapeIndex = {}; // chordName -> index in alternatives
 let loopRange = null; // { start, end, label } | null
 let nextChordJumpTime = null;
 let lastDisplayedCurrentChord = null;
+let lastDisplayedNextChord = null;
+let lastLaneChord = null;
+let laneBlocks = [];
+let currentTrackOffsetPx = 0;
+let isDraggingLane = false;
+let laneDragMoved = false;
+let laneDragStartX = 0;
+let laneDragStartOffset = 0;
 let isSeekingSlider = false;
 let playbackRate = 1;
 
@@ -375,9 +387,13 @@ function renderAnalysis(data) {
   leadSheetEl.classList.toggle("show-details", showMoreDetail);
   followTeleprompter.hidden = !followMode;
   lastActiveBarIdx = -1;
+  lastActiveBeatIdx = -1;
   lastDisplayedCurrentChord = null;
+  lastDisplayedNextChord = null;
+  lastLaneChord = null;
 
   updatePlayAlongUI();
+  buildChordLane(beatChords);
   renderFollowTeleprompter(0);
 
   beatNodes = [];
@@ -441,8 +457,7 @@ function renderAnalysis(data) {
       const prevBeat = beat.beat_index > 0 ? beatChords[beat.beat_index - 1] : null;
       const shownChord = getDisplayedChord(beat.chord);
       const prevShownChord = prevBeat ? getDisplayedChord(prevBeat.chord) : null;
-      const isLastBeat = beat.beat_index === beatChords.length - 1;
-      const isRepeat = prevShownChord && prevShownChord === shownChord && offset > 0 && !isLastBeat;
+      const isChange = !prevShownChord || prevShownChord !== shownChord;
       const confPct = Math.round((beat.confidence || 0) * 100);
 
       cell.setAttribute(
@@ -450,7 +465,7 @@ function renderAnalysis(data) {
         `Bar ${barIdx + 1} beat ${offset + 1}, chord ${shownChord}, confidence ${confPct}%`
       );
       const detailHtml = `<span class="beat-meta">b${offset + 1} · ${beat.edited ? "edited" : `${confPct}%`}</span>`;
-      cell.innerHTML = `<span>${isRepeat ? "/" : shownChord}</span>${detailHtml}`;
+      cell.innerHTML = `<span>${isChange ? shownChord : ""}</span>${detailHtml}`;
 
       cell.addEventListener("click", () => {
         if (isEditMode) {
@@ -773,6 +788,132 @@ function findActiveBeatIndex(beats, t) {
   return ans;
 }
 
+function getLaneBeatPx() {
+  return window.innerWidth <= 767 ? 44 : 56;
+}
+
+function buildChordLane(beats) {
+  if (!chordLaneTrack) return;
+  chordLaneTrack.innerHTML = "";
+  laneBlocks = [];
+  if (!beats || beats.length === 0) return;
+
+  const beatPx = getLaneBeatPx();
+  const segments = [];
+  for (let i = 0; i < beats.length; i += 1) {
+    const b = beats[i];
+    const chord = getDisplayedChord(b.chord);
+    const prev = segments[segments.length - 1];
+    if (prev && prev.chord === chord) {
+      prev.beatEnd = i;
+      prev.beatCount += 1;
+      prev.end = b.end;
+    } else {
+      segments.push({
+        chord,
+        beatStart: i,
+        beatEnd: i,
+        beatCount: 1,
+        start: b.start,
+        end: b.end,
+      });
+    }
+  }
+
+  for (const seg of segments) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "lane-block";
+    btn.style.width = `${seg.beatCount * beatPx}px`;
+    btn.textContent = seg.chord;
+    btn.setAttribute("aria-label", `${seg.chord}, ${seg.beatCount} beat${seg.beatCount === 1 ? "" : "s"}`);
+    btn.addEventListener("click", () => {
+      if (laneDragMoved) return;
+      audioPlayer.currentTime = seg.start;
+      updatePlayhead();
+    });
+    chordLaneTrack.appendChild(btn);
+    laneBlocks.push({ ...seg, el: btn });
+  }
+}
+
+function triggerPlayheadFlash() {
+  if (!lanePlayhead) return;
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  lanePlayhead.classList.remove("flash");
+  void lanePlayhead.offsetWidth;
+  lanePlayhead.classList.add("flash");
+}
+
+function updateChordLanePosition(beats, activeBeatIdx, curT) {
+  if (!chordLaneViewport || !chordLaneTrack || !beats || beats.length === 0 || isDraggingLane) return;
+  const beatPx = getLaneBeatPx();
+  const playheadX = chordLaneViewport.clientWidth * 0.3;
+  let beatFloat = 0;
+  if (activeBeatIdx >= 0 && beats[activeBeatIdx]) {
+    const b = beats[activeBeatIdx];
+    const frac = Math.max(0, Math.min(1, (curT - b.start) / Math.max(0.05, b.end - b.start)));
+    beatFloat = activeBeatIdx + frac;
+  }
+  currentTrackOffsetPx = playheadX - beatFloat * beatPx;
+  chordLaneTrack.style.transform = `translate3d(${currentTrackOffsetPx.toFixed(1)}px, 0, 0)`;
+
+  for (const blk of laneBlocks) {
+    const isActive = activeBeatIdx >= blk.beatStart && activeBeatIdx <= blk.beatEnd;
+    const isPast = activeBeatIdx > blk.beatEnd;
+    blk.el.classList.toggle("active", isActive);
+    blk.el.classList.toggle("past", isPast);
+  }
+}
+
+if (chordLaneViewport) {
+  chordLaneViewport.addEventListener("pointerdown", (event) => {
+    if (!currentAnalysis || !currentAnalysis.beat_chords || !currentAnalysis.beat_chords.length) return;
+    isDraggingLane = true;
+    laneDragMoved = false;
+    laneDragStartX = event.clientX;
+    laneDragStartOffset = currentTrackOffsetPx;
+    chordLaneViewport.classList.add("is-dragging");
+  });
+
+  window.addEventListener("pointermove", (event) => {
+    if (!isDraggingLane) return;
+    const dx = event.clientX - laneDragStartX;
+    if (Math.abs(dx) > 6) {
+      laneDragMoved = true;
+    }
+    if (laneDragMoved && chordLaneTrack) {
+      currentTrackOffsetPx = laneDragStartOffset + dx;
+      chordLaneTrack.style.transform = `translate3d(${currentTrackOffsetPx.toFixed(1)}px, 0, 0)`;
+    }
+  });
+
+  const finishLaneDrag = () => {
+    if (!isDraggingLane) return;
+    isDraggingLane = false;
+    chordLaneViewport.classList.remove("is-dragging");
+    if (laneDragMoved && currentAnalysis && currentAnalysis.beat_chords && currentAnalysis.beat_chords.length) {
+      const beats = currentAnalysis.beat_chords;
+      const beatPx = getLaneBeatPx();
+      const playheadX = chordLaneViewport.clientWidth * 0.3;
+      const targetBeatFloat = Math.max(0, Math.min(beats.length - 0.01, (playheadX - currentTrackOffsetPx) / beatPx));
+      const idx = Math.floor(targetBeatFloat);
+      const frac = targetBeatFloat - idx;
+      const b = beats[idx];
+      if (b) {
+        audioPlayer.currentTime = b.start + frac * Math.max(0.05, b.end - b.start);
+        updatePlayhead();
+      }
+    }
+    window.setTimeout(() => {
+      laneDragMoved = false;
+    }, 30);
+  };
+
+  window.addEventListener("pointerup", finishLaneDrag);
+  window.addEventListener("pointercancel", finishLaneDrag);
+}
+
 function updatePlayhead() {
   if (!currentAnalysis || !currentAnalysis.beat_chords) return;
   const rawT = audioPlayer.currentTime;
@@ -812,7 +953,6 @@ function updatePlayhead() {
     }
 
     const beatInBar = activeBeatIdx % 4;
-    npBeatDots.forEach((dot, idx) => dot.classList.toggle("active", idx === beatInBar));
     const barStartBeat = beats[barIdx * 4];
     const barEndBeat = beats[Math.min(beats.length - 1, barIdx * 4 + 3)];
     const barStart = barStartBeat ? barStartBeat.start : 0;
@@ -822,6 +962,12 @@ function updatePlayhead() {
 
     const curShown = getDisplayedChord(beat.chord);
     nowPlayingChordEl.textContent = curShown;
+    if (curShown !== lastLaneChord) {
+      if (lastLaneChord !== null) {
+        triggerPlayheadFlash();
+      }
+      lastLaneChord = curShown;
+    }
     if (curShown !== lastDisplayedCurrentChord) {
       lastDisplayedCurrentChord = curShown;
       const shapeInfo = getActiveShapeForChord(curShown);
@@ -842,13 +988,47 @@ function updatePlayhead() {
       }
     }
 
+    const beatFrac = Math.max(0, Math.min(1, (curT - beat.start) / Math.max(0.05, beat.end - beat.start)));
+    const isNowWindow = nextChord && beatsUntil === 1 && beatFrac >= 0.7;
+
     if (nextChord) {
       nowPlayingNextChordEl.textContent = nextChord;
-      nowPlayingCountdownEl.textContent = `in ${beatsUntil} beat${beatsUntil === 1 ? "" : "s"}`;
+      if (isNowWindow) {
+        nowPlayingCountdownEl.textContent = "now";
+      } else if (beatsUntil <= Math.max(3, earlyBeats)) {
+        nowPlayingCountdownEl.textContent = `in ${beatsUntil}`;
+      } else {
+        nowPlayingCountdownEl.textContent = `in ${beatsUntil} beats`;
+      }
+      if (nextChord !== lastDisplayedNextChord) {
+        lastDisplayedNextChord = nextChord;
+        renderDiagramInto(npNextDiagram, nextChord, true);
+      }
     } else {
       nowPlayingNextChordEl.textContent = "End";
       nowPlayingCountdownEl.textContent = "";
+      if (npNextDiagram) npNextDiagram.innerHTML = "";
+      lastDisplayedNextChord = null;
     }
+
+    // Beat dots: countdown ("3", "2", "1", "now") before a change, else 1-2-3-4 pulse
+    if (nextChord && beatsUntil <= 3) {
+      const countLabels = ["3", "2", "1", "now"];
+      const activeCountdownIdx = isNowWindow ? 3 : 3 - beatsUntil;
+      npBeatDots.forEach((dot, idx) => {
+        dot.textContent = countLabels[idx];
+        dot.classList.add("countdown");
+        dot.classList.toggle("active", idx === activeCountdownIdx);
+      });
+    } else {
+      npBeatDots.forEach((dot, idx) => {
+        dot.textContent = String(idx + 1);
+        dot.classList.remove("countdown");
+        dot.classList.toggle("active", idx === beatInBar);
+      });
+    }
+
+    updateChordLanePosition(beats, activeBeatIdx, curT);
 
     if (barIdx !== lastActiveBarIdx) {
       lastActiveBarIdx = barIdx;
@@ -862,8 +1042,12 @@ function updatePlayhead() {
     nowPlayingChordEl.textContent = firstChord;
     nowPlayingNextChordEl.textContent = "—";
     nowPlayingCountdownEl.textContent = "";
-    npBeatDots.forEach((dot) => dot.classList.remove("active"));
+    npBeatDots.forEach((dot, idx) => {
+      dot.textContent = String(idx + 1);
+      dot.classList.remove("active", "countdown");
+    });
     npBarProgress.style.width = "0%";
+    updateChordLanePosition(beats, 0, beats[0].start);
     if (firstChord !== lastDisplayedCurrentChord) {
       lastDisplayedCurrentChord = firstChord;
       const shapeInfo = getActiveShapeForChord(firstChord);

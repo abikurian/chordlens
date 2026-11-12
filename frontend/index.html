@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/styles.css?v=20261112j" />
+  <link rel="stylesheet" href="/styles.css?v=20261112k" />
 </head>
 <body>
   <header class="topbar">
@@ -117,7 +117,13 @@
               <strong id="now-playing-next-chord" class="now-playing-next-chord">—</strong>
               <span id="now-playing-countdown" class="now-playing-countdown"></span>
             </div>
+            <div id="np-next-diagram" class="np-diagram np-diagram-sm"></div>
           </button>
+        </div>
+
+        <div id="chord-lane-viewport" class="chord-lane-viewport" aria-label="Upcoming chords timeline">
+          <div id="lane-playhead" class="lane-playhead" aria-hidden="true"></div>
+          <div id="chord-lane-track" class="chord-lane-track"></div>
         </div>
 
         <div class="np-progress-row">
@@ -264,7 +270,7 @@
     </div>
   </aside>
 
-  <script src="/chordShapes.js?v=20261112j"></script>
-  <script src="/app.js?v=20261112j"></script>
+  <script src="/chordShapes.js?v=20261112k"></script>
+  <script src="/app.js?v=20261112k"></script>
 </body>
 </html>
