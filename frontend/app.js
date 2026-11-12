@@ -66,6 +66,7 @@ const followModeBtn = document.getElementById("follow-mode-btn");
 const moreDetailBtn = document.getElementById("more-detail-btn");
 const editModeBtn = document.getElementById("edit-mode-btn");
 const newSongBtn = document.getElementById("new-song-btn");
+const themeBtns = Array.from(document.querySelectorAll(".theme-btn"));
 
 window.addEventListener("error", (event) => {
   console.error("ChordLens UI error:", event.error || event.message);
@@ -108,6 +109,7 @@ let nextChordJumpTime = null;
 let lastDisplayedCurrentChord = null;
 let isSeekingSlider = false;
 let playbackRate = 1;
+let currentTheme = "auto"; // "auto" | "light" | "stage"
 
 // Key-aware spelling tables (never produce E#, B#, Fb, or Cb)
 const NOTE_TO_PC = {
@@ -237,8 +239,16 @@ function updateSettingsDot() {
     loopRange !== null ||
     followMode ||
     showMoreDetail ||
-    isEditMode;
+    isEditMode ||
+    currentTheme !== "auto";
   settingsDot.hidden = !nonDefault;
+}
+
+function applyTheme(theme) {
+  currentTheme = theme;
+  document.documentElement.dataset.theme = theme;
+  themeBtns.forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.theme === theme)));
+  updateSettingsDot();
 }
 
 function openSettingsDrawer() {
@@ -299,7 +309,8 @@ function updatePlayAlongUI() {
   if (!currentAnalysis) {
     setPlayAlongEnabled(false);
     transposeValEl.textContent = "0";
-    resultingKeyEl.textContent = "Key: —";
+    resultingKeyEl.textContent = "—";
+    transposeResetBtn.hidden = true;
     updateSettingsDot();
     return;
   }
@@ -307,8 +318,9 @@ function updatePlayAlongUI() {
   const origKey = currentAnalysis.key || "Unknown";
   const soundingKey = transposeKey(origKey, transposeSemitones);
   transposeValEl.textContent = transposeSemitones > 0 ? `+${transposeSemitones}` : String(transposeSemitones);
-  resultingKeyEl.textContent = `Key: ${soundingKey}`;
+  resultingKeyEl.textContent = soundingKey;
   capoSelect.value = String(capoFret);
+  transposeResetBtn.hidden = transposeSemitones === 0 && capoFret === 0;
   viewShapesBtn.setAttribute("aria-pressed", String(showShapesMode));
   viewShapesBtn.textContent = showShapesMode ? "Show: Shapes to play" : "Show: Sounding chords";
   updateSongSummary();
@@ -794,11 +806,20 @@ function updatePlayhead() {
 }
 
 // Top bar & menus
-brandHomeBtn.addEventListener("click", () => {
+brandHomeBtn.addEventListener("click", (event) => {
+  event.preventDefault();
   if (currentAnalysis) {
     showInputView();
   }
 });
+
+themeBtns.forEach((btn) => {
+  btn.addEventListener("click", () => {
+    applyTheme(btn.dataset.theme || "auto");
+  });
+});
+
+applyTheme("auto");
 
 newSongBtn.addEventListener("click", showInputView);
 

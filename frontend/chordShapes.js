@@ -218,27 +218,27 @@
     // Capo bar at top if active
     if (capoFret > 0) {
       const capoY = compact ? 8 : 10;
-      parts.push(`<rect x="${left - 4}" y="${capoY}" width="${gridW + 8}" height="${compact ? 5 : 6}" rx="2" fill="#0F766E" />`);
-      parts.push(`<text x="${left + gridW / 2}" y="${capoY - 2}" text-anchor="middle" font-size="${compact ? 7 : 8}" font-weight="700" fill="#0F766E">Capo ${capoFret}</text>`);
+      parts.push(`<rect x="${left - 4}" y="${capoY}" width="${gridW + 8}" height="${compact ? 5 : 6}" rx="2" fill="var(--accent, #0F766E)" />`);
+      parts.push(`<text x="${left + gridW / 2}" y="${capoY - 2}" text-anchor="middle" font-size="${compact ? 7 : 8}" font-weight="700" fill="var(--accent, #0F766E)">Capo ${capoFret}</text>`);
     }
 
     // Nut or base fret label
     if (baseFret === 1) {
-      parts.push(`<rect x="${left}" y="${top - 2}" width="${gridW}" height="3" fill="#111815" />`);
+      parts.push(`<rect x="${left}" y="${top - 2}" width="${gridW}" height="3" fill="var(--ink, #111815)" />`);
     } else {
-      parts.push(`<text x="${left - 5}" y="${top + fretStep * 0.72}" text-anchor="end" font-size="${compact ? 8 : 10}" font-weight="600" fill="#4A5752">${baseFret}fr</text>`);
+      parts.push(`<text x="${left - 5}" y="${top + fretStep * 0.72}" text-anchor="end" font-size="${compact ? 8 : 10}" font-weight="600" fill="var(--ink-muted, #4A5752)">${baseFret}fr</text>`);
     }
 
     // Fret lines
     for (let f = 0; f <= numFrets; f += 1) {
       const y = top + f * fretStep;
-      parts.push(`<line x1="${left}" y1="${y}" x2="${left + gridW}" y2="${y}" stroke="#CFD8D4" stroke-width="1" />`);
+      parts.push(`<line x1="${left}" y1="${y}" x2="${left + gridW}" y2="${y}" stroke="var(--rule, #CFD8D4)" stroke-width="1" />`);
     }
 
     // String lines
     for (let s = 0; s < 6; s += 1) {
       const x = left + s * strStep;
-      parts.push(`<line x1="${x}" y1="${top}" x2="${x}" y2="${top + gridH}" stroke="#4A5752" stroke-width="1" />`);
+      parts.push(`<line x1="${x}" y1="${top}" x2="${x}" y2="${top + gridH}" stroke="var(--ink-muted, #4A5752)" stroke-width="1" />`);
     }
 
     // Barre bar
@@ -249,7 +249,7 @@
         const x1 = left + shape.barre.from * strStep;
         const x2 = left + shape.barre.to * strStep;
         const r = compact ? 4 : 5;
-        parts.push(`<rect x="${x1 - r}" y="${y - r}" width="${(x2 - x1) + r * 2}" height="${r * 2}" rx="${r}" fill="#111815" />`);
+        parts.push(`<rect x="${x1 - r}" y="${y - r}" width="${(x2 - x1) + r * 2}" height="${r * 2}" rx="${r}" fill="var(--ink, #111815)" />`);
       }
     }
 
@@ -261,15 +261,15 @@
       const x = left + s * strStep;
       if (fret < 0) {
         const d = compact ? 2.2 : 2.8;
-        parts.push(`<line x1="${x - d}" y1="${markerY - d}" x2="${x + d}" y2="${markerY + d}" stroke="#4A5752" stroke-width="1.3" />`);
-        parts.push(`<line x1="${x + d}" y1="${markerY - d}" x2="${x - d}" y2="${markerY + d}" stroke="#4A5752" stroke-width="1.3" />`);
+        parts.push(`<line x1="${x - d}" y1="${markerY - d}" x2="${x + d}" y2="${markerY + d}" stroke="var(--ink-muted, #4A5752)" stroke-width="1.3" />`);
+        parts.push(`<line x1="${x + d}" y1="${markerY - d}" x2="${x - d}" y2="${markerY + d}" stroke="var(--ink-muted, #4A5752)" stroke-width="1.3" />`);
       } else if (fret === 0) {
-        parts.push(`<circle cx="${x}" cy="${markerY}" r="${compact ? 2.4 : 3}" fill="none" stroke="#111815" stroke-width="1.3" />`);
+        parts.push(`<circle cx="${x}" cy="${markerY}" r="${compact ? 2.4 : 3}" fill="none" stroke="var(--ink, #111815)" stroke-width="1.3" />`);
       } else {
         const relFret = fret - baseFret + 1;
         if (relFret >= 1 && relFret <= numFrets) {
           const y = top + (relFret - 0.5) * fretStep;
-          parts.push(`<circle cx="${x}" cy="${y}" r="${dotR}" fill="#111815" />`);
+          parts.push(`<circle cx="${x}" cy="${y}" r="${dotR}" fill="var(--ink, #111815)" />`);
         }
       }
     }
@@ -283,3 +283,4 @@
     renderChordDiagramSvg,
   };
 })(window);
+

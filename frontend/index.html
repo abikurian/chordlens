@@ -5,16 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#0f766e" />
   <title>ChordLens</title>
-  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link rel="icon" href="/logo.svg" type="image/svg+xml" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/styles.css?v=20261112e" />
+  <link rel="stylesheet" href="/styles.css?v=20261112f" />
 </head>
 <body>
   <header class="topbar">
     <div class="topbar-inner">
-      <button type="button" id="brand-home-btn" class="brand-btn" title="ChordLens">ChordLens</button>
+      <a href="#top" id="brand-home-btn" class="brand-link" aria-label="ChordLens">
+        <img src="/logo.svg" alt="" class="brand-logo" width="28" height="28" />
+        <span class="brand-name">ChordLens</span>
+      </a>
       <div class="topbar-actions">
         <button type="button" id="settings-btn" class="btn btn-secondary btn-sm settings-trigger" aria-expanded="false" aria-controls="settings-drawer">
           Settings
@@ -121,6 +124,42 @@
         </div>
       </section>
 
+      <div id="key-strip" class="key-strip" aria-label="Transpose and capo">
+        <div class="key-strip-group" role="group" aria-label="Transpose">
+          <span class="key-strip-label">Transpose</span>
+          <button type="button" id="transpose-down-btn" class="key-step-btn" aria-label="Transpose down one semitone">-</button>
+          <span id="transpose-val" class="transpose-val">0</span>
+          <button type="button" id="transpose-up-btn" class="key-step-btn" aria-label="Transpose up one semitone">+</button>
+          <span id="resulting-key" class="key-strip-key">—</span>
+        </div>
+
+        <div class="key-strip-group">
+          <label for="capo-select" class="key-strip-label">Capo</label>
+          <select id="capo-select" class="capo-select-inline">
+            <option value="0">None</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+            <option value="6">6</option>
+            <option value="7">7</option>
+            <option value="8">8</option>
+            <option value="9">9</option>
+            <option value="10">10</option>
+            <option value="11">11</option>
+            <option value="12">12</option>
+          </select>
+          <button type="button" id="suggest-capo-btn" class="key-link-btn">Suggest</button>
+          <button type="button" id="transpose-reset-btn" class="key-link-btn" hidden>Reset</button>
+        </div>
+      </div>
+
+      <div id="capo-suggestion" class="capo-suggestion" hidden>
+        <span id="capo-suggestion-text"></span>
+        <button type="button" id="apply-capo-btn" class="key-link-btn">Apply</button>
+      </div>
+
       <div id="chord-popover" class="chord-popover" role="dialog" aria-modal="false" aria-labelledby="popover-title" hidden>
         <div class="popover-head">
           <div>
@@ -158,47 +197,6 @@
         </div>
       </section>
 
-      <section class="settings-group" aria-labelledby="settings-key-heading">
-        <h3 id="settings-key-heading" class="settings-group-title">Key</h3>
-        <div class="settings-control-row">
-          <span class="settings-label">Transpose</span>
-          <div class="transpose-controls" role="group" aria-label="Transpose">
-            <button type="button" id="transpose-down-btn" class="btn btn-secondary btn-sm btn-icon" aria-label="Transpose down one semitone" disabled>-</button>
-            <span id="transpose-val" class="transpose-val">0</span>
-            <button type="button" id="transpose-up-btn" class="btn btn-secondary btn-sm btn-icon" aria-label="Transpose up one semitone" disabled>+</button>
-            <button type="button" id="transpose-reset-btn" class="btn btn-secondary btn-sm" disabled>Reset</button>
-          </div>
-          <span id="resulting-key" class="settings-meta">Key: —</span>
-        </div>
-
-        <div class="settings-control-row">
-          <label for="capo-select" class="settings-label">Capo</label>
-          <select id="capo-select" class="capo-select" disabled>
-            <option value="0">No capo</option>
-            <option value="1">1</option>
-            <option value="2">2</option>
-            <option value="3">3</option>
-            <option value="4">4</option>
-            <option value="5">5</option>
-            <option value="6">6</option>
-            <option value="7">7</option>
-            <option value="8">8</option>
-            <option value="9">9</option>
-            <option value="10">10</option>
-            <option value="11">11</option>
-            <option value="12">12</option>
-          </select>
-          <button type="button" id="suggest-capo-btn" class="btn btn-secondary btn-sm" disabled>Suggest capo</button>
-        </div>
-
-        <div id="capo-suggestion" class="capo-suggestion" hidden>
-          <span id="capo-suggestion-text"></span>
-          <button type="button" id="apply-capo-btn" class="btn btn-primary btn-sm">Apply</button>
-        </div>
-
-        <p class="settings-note">Transpose and capo change only the chord names. The audio stays in the original key.</p>
-      </section>
-
       <section class="settings-group" aria-labelledby="settings-practice-heading">
         <h3 id="settings-practice-heading" class="settings-group-title">Practice</h3>
         <div class="settings-control-row">
@@ -218,6 +216,14 @@
       <section class="settings-group" aria-labelledby="settings-more-heading">
         <h3 id="settings-more-heading" class="settings-group-title">More</h3>
         <div class="settings-control-row">
+          <span class="settings-label">Theme</span>
+          <div class="speed-group" role="group" aria-label="Theme">
+            <button type="button" class="btn btn-secondary btn-sm theme-btn" data-theme="auto" aria-pressed="true">Auto</button>
+            <button type="button" class="btn btn-secondary btn-sm theme-btn" data-theme="light" aria-pressed="false">Light</button>
+            <button type="button" class="btn btn-secondary btn-sm theme-btn" data-theme="stage" aria-pressed="false">Stage</button>
+          </div>
+        </div>
+        <div class="settings-control-row">
           <button type="button" id="more-detail-btn" class="btn btn-secondary btn-sm" aria-pressed="false">Show details</button>
           <button type="button" id="edit-mode-btn" class="btn btn-secondary btn-sm" aria-pressed="false" disabled>Edit chords</button>
         </div>
@@ -228,7 +234,7 @@
     </div>
   </aside>
 
-  <script src="/chordShapes.js?v=20261112e"></script>
-  <script src="/app.js?v=20261112e"></script>
+  <script src="/chordShapes.js?v=20261112f"></script>
+  <script src="/app.js?v=20261112f"></script>
 </body>
 </html>

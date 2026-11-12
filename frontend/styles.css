@@ -4,6 +4,7 @@
   --surface-muted: #e8eeec;
   --ink: #111815;
   --ink-muted: #4a5752;
+  --ink-played: #5e6b66;
   --rule: #cfd8d4;
   --accent: #0f766e;
   --accent-hover: #0d635c;
@@ -14,9 +15,43 @@
   --radius: 8px;
   --font-display: "Space Grotesk", sans-serif;
   --font-body: "IBM Plex Sans", sans-serif;
-  --text-hero: clamp(2.4rem, 5vw, 3.4rem);
+  --text-hero: clamp(2.5rem, 5.5vw, 3.6rem);
   --text-chord: clamp(1.15rem, 1.8vw, 1.4rem);
   --text-body: 0.9375rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) {
+    --bg: #0e1312;
+    --surface: #161d1b;
+    --surface-muted: #1e2825;
+    --ink: #edf3f1;
+    --ink-muted: #9eb0aa;
+    --ink-played: #7e918a;
+    --rule: #2c3834;
+    --accent: #0f766e;
+    --accent-hover: #0d635c;
+    --accent-soft: #132d2a;
+    --error-ink: #fecaca;
+    --error-bg: #450a0a;
+    --error-border: #dc2626;
+  }
+}
+
+html[data-theme="stage"] {
+  --bg: #0e1312;
+  --surface: #161d1b;
+  --surface-muted: #1e2825;
+  --ink: #edf3f1;
+  --ink-muted: #9eb0aa;
+  --ink-played: #7e918a;
+  --rule: #2c3834;
+  --accent: #0f766e;
+  --accent-hover: #0d635c;
+  --accent-soft: #132d2a;
+  --error-ink: #fecaca;
+  --error-bg: #450a0a;
+  --error-border: #dc2626;
 }
 
 *,
@@ -65,18 +100,26 @@ body {
   gap: 1rem;
 }
 
-.brand-btn {
-  appearance: none;
-  background: transparent;
-  border: 0;
-  padding: 0.25rem 0;
+.brand-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
   min-height: 44px;
+  padding: 0.25rem 0;
+  text-decoration: none;
   font-family: var(--font-display);
   font-size: var(--text-chord);
   font-weight: 700;
   letter-spacing: -0.02em;
   color: var(--ink);
-  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.brand-logo {
+  width: 28px;
+  height: 28px;
+  display: block;
+  flex-shrink: 0;
 }
 
 .topbar-actions {
@@ -110,7 +153,6 @@ body {
   font-size: var(--text-body);
   font-weight: 500;
   cursor: pointer;
-  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
 .btn:hover:not(:disabled) {
@@ -577,18 +619,16 @@ body {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
-  transition: opacity 0.15s ease, background-color 0.15s ease;
 }
 
-.bar-card.played {
-  opacity: 0.4;
+.bar-card.played .beat-cell {
+  color: var(--ink-played);
 }
 
 .bar-card.active {
   border-left: 3px solid var(--accent);
   background: var(--accent-soft);
   border-radius: 0 var(--radius) var(--radius) 0;
-  opacity: 1;
 }
 
 .bar-head {
@@ -761,14 +801,89 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+/* Slim key strip directly below Now playing */
+.key-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem 1.25rem;
+}
+
+.key-strip-group {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.key-strip-label {
+  color: var(--ink-muted);
+  font-size: var(--text-body);
+}
+
+.key-strip-key {
+  color: var(--ink);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  margin-left: 0.25rem;
+}
+
+.key-step-btn {
+  appearance: none;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: var(--text-body);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.key-step-btn:hover:not(:disabled) {
+  background: var(--surface-muted);
+}
+
+.capo-select-inline {
+  min-height: 44px;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: var(--text-body);
+}
+
+.key-link-btn {
+  appearance: none;
+  min-height: 44px;
+  padding: 0.25rem 0.4rem;
+  border: 0;
+  background: transparent;
+  color: var(--ink-muted);
+  font-family: var(--font-body);
+  font-size: var(--text-body);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.key-link-btn:hover {
+  color: var(--ink);
+}
+
 .capo-suggestion {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  padding: 0.65rem 0.75rem;
-  background: var(--surface-muted);
-  border-radius: var(--radius);
+  padding: 0.25rem 0;
+  color: var(--ink-muted);
 }
 
 /* Responsive */
@@ -781,7 +896,16 @@ body {
 
 @media (max-width: 720px) {
   .topbar {
-    padding: 0.65rem 1rem;
+    padding: 0.6rem 0.85rem;
+  }
+
+  .brand-logo {
+    width: 24px;
+    height: 24px;
+  }
+
+  .btn-sm {
+    padding: 0.4rem 0.65rem;
   }
 
   .workspace {
