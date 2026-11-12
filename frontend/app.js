@@ -33,6 +33,20 @@ const nowPlayingNextChordEl = document.getElementById("now-playing-next-chord");
 const nowPlayingCountdownEl = document.getElementById("now-playing-countdown");
 const jumpToBarBtn = document.getElementById("jump-to-bar-btn");
 
+const playAlongPanel = document.getElementById("play-along-panel");
+const transposeDownBtn = document.getElementById("transpose-down-btn");
+const transposeUpBtn = document.getElementById("transpose-up-btn");
+const transposeValEl = document.getElementById("transpose-val");
+const transposeResetBtn = document.getElementById("transpose-reset-btn");
+const resultingKeyEl = document.getElementById("resulting-key");
+const capoSelect = document.getElementById("capo-select");
+const suggestCapoBtn = document.getElementById("suggest-capo-btn");
+const viewShapesBtn = document.getElementById("view-shapes-btn");
+const capoSuggestionBox = document.getElementById("capo-suggestion");
+const capoSuggestionText = document.getElementById("capo-suggestion-text");
+const applyCapoBtn = document.getElementById("apply-capo-btn");
+const playAlongSummaryEl = document.getElementById("play-along-summary");
+
 let currentAnalysis = null;
 let beatNodes = [];
 let barNodes = [];
@@ -44,6 +58,75 @@ let showMoreDetail = false;
 let autoScrollEnabled = true;
 let isProgrammaticScroll = false;
 let lastActiveBarIdx = -1;
+let transposeSemitones = 0; // -11 .. +11
+let capoFret = 0; // 0 .. 12
+let showShapesMode = true; // true = shapes to play, false = sounding chords
+let suggestedCapoFret = null;
+
+// Key-aware spelling tables (never produce E#, B#, Fb, or Cb)
+const NOTE_TO_PC = {
+  C: 0, "B#": 0, "C#": 1, Db: 1, D: 2, "D#": 3, Eb: 3, E: 4, Fb: 4,
+  F: 5, "E#": 5, "F#": 6, Gb: 6, G: 7, "G#": 8, Ab: 8, A: 9, "A#": 10, Bb: 10, B: 11, Cb: 11,
+};
+const SHARP_SPELLING = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+const FLAT_SPELLING = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
+const GUITAR_NEUTRAL_SPELLING = ["C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"];
+const OPEN_GUITAR_CHORDS = new Set(["C", "G", "D", "A", "E", "Am", "Em", "Dm"]);
+
+// Relative major pitch classes for flat keys: F(5), Bb(10), Eb(3), Ab(8), Db(1), Gb(6)
+const FLAT_MAJOR_PCS = new Set([5, 10, 3, 8, 1, 6]);
+const SHARP_MAJOR_PCS = new Set([7, 2, 9, 4, 11]); // G, D, A, E, B
+
+function parseKey(keyStr) {
+  if (!keyStr || keyStr === "Unknown") return null;
+  const parts = keyStr.trim().split(/\s+/);
+  if (parts.length < 2 || NOTE_TO_PC[parts[0]] === undefined) return null;
+  return { pc: NOTE_TO_PC[parts[0]], mode: parts[1].toLowerCase() === "minor" ? "minor" : "major" };
+}
+
+function getRelativeMajorPc(keyInfo) {
+  if (!keyInfo) return 0;
+  return keyInfo.mode === "minor" ? (keyInfo.pc + 3) % 12 : keyInfo.pc;
+}
+
+function getSpellingForKey(keyStr) {
+  const info = parseKey(keyStr);
+  if (!info) return GUITAR_NEUTRAL_SPELLING;
+  const relMaj = getRelativeMajorPc(info);
+  if (FLAT_MAJOR_PCS.has(relMaj)) return FLAT_SPELLING;
+  if (SHARP_MAJOR_PCS.has(relMaj)) return SHARP_SPELLING;
+  return GUITAR_NEUTRAL_SPELLING;
+}
+
+function transposeKey(keyStr, semitones) {
+  const info = parseKey(keyStr);
+  if (!info) return keyStr || "Unknown";
+  const newPc = ((info.pc + semitones) % 12 + 12) % 12;
+  const relMaj = info.mode === "minor" ? (newPc + 3) % 12 : newPc;
+  const table = FLAT_MAJOR_PCS.has(relMaj)
+    ? FLAT_SPELLING
+    : SHARP_MAJOR_PCS.has(relMaj)
+      ? SHARP_SPELLING
+      : GUITAR_NEUTRAL_SPELLING;
+  return `${table[newPc]} ${info.mode}`;
+}
+
+function transposeSingleToken(token, semitones, spellingTable) {
+  const m = token.match(/^([A-G][#b]?)(.*)$/);
+  if (!m || NOTE_TO_PC[m[1]] === undefined) return token;
+  const pc = ((NOTE_TO_PC[m[1]] + semitones) % 12 + 12) % 12;
+  return `${spellingTable[pc]}${m[2]}`;
+}
+
+function transposeChord(chord, semitones, targetKeyStr) {
+  if (!chord || chord === "N") return chord || "N";
+  const table = getSpellingForKey(targetKeyStr);
+  if (chord.includes("/")) {
+    const [main, bass] = chord.split("/", 2);
+    return `${transposeSingleToken(main, semitones, table)}/${transposeSingleToken(bass, semitones, table)}`;
+  }
+  return transposeSingleToken(chord, semitones, table);
+}
 
 function simplifyChord(chord) {
   if (!chord || chord === "N") return chord || "N";
@@ -52,8 +135,23 @@ function simplifyChord(chord) {
   return `${match[1]}${match[2] || ""}`;
 }
 
+function getSoundingChord(rawChord) {
+  const origKey = currentAnalysis ? currentAnalysis.key : "C major";
+  const soundingKey = transposeKey(origKey, transposeSemitones);
+  const full = transposeChord(rawChord, transposeSemitones, soundingKey);
+  return chordDetailMode === "simple" ? simplifyChord(full) : full;
+}
+
+function getShapeChord(rawChord) {
+  const origKey = currentAnalysis ? currentAnalysis.key : "C major";
+  const soundingKey = transposeKey(origKey, transposeSemitones);
+  const shapeKey = transposeKey(soundingKey, -capoFret);
+  const full = transposeChord(rawChord, transposeSemitones - capoFret, shapeKey);
+  return chordDetailMode === "simple" ? simplifyChord(full) : full;
+}
+
 function getDisplayedChord(rawChord) {
-  return chordDetailMode === "simple" ? simplifyChord(rawChord) : rawChord;
+  return showShapesMode && capoFret > 0 ? getShapeChord(rawChord) : getSoundingChord(rawChord);
 }
 
 function formatTime(seconds) {
@@ -112,10 +210,12 @@ function renderAnalysis(data) {
   chartSubtitle.textContent = `${totalBars} bars · ${beatChords.length} beats${endsSummary} · Click any beat to ${isEditMode ? "edit" : "jump"}`;
   chartEmpty.hidden = true;
   chartToolbar.hidden = false;
+  playAlongPanel.hidden = beatChords.length === 0;
   nowPlayingStrip.hidden = beatChords.length === 0;
   leadSheetEl.hidden = false;
   leadSheetEl.innerHTML = "";
   lastActiveBarIdx = -1;
+  updatePlayAlongUI();
 
   beatNodes = [];
   barNodes = [];
@@ -306,9 +406,14 @@ function downloadTextFile(filename, content, mimeType) {
 }
 
 function formatChordSheetText(data) {
+  const origKey = data.key || "Unknown";
+  const soundingKey = transposeKey(origKey, transposeSemitones);
+  const viewDesc = capoFret > 0 && showShapesMode
+    ? `Capo ${capoFret} shapes (sounding in ${soundingKey})`
+    : `Sounding in ${soundingKey}`;
   const lines = [
     `${data.title || "Untitled"}`,
-    `Key: ${data.key || "Unknown"} | Tempo: ${data.tempo || "—"} BPM | Time: ${data.time_signature || "4/4"}`,
+    `Key: ${soundingKey} | Tempo: ${data.tempo || "—"} BPM | Time: ${data.time_signature || "4/4"} | Transpose: ${transposeSemitones > 0 ? `+${transposeSemitones}` : transposeSemitones} | ${viewDesc}`,
     "",
   ];
   const beats = data.beat_chords || [];
@@ -386,8 +491,141 @@ editModeBtn.addEventListener("click", () => {
 
 exportJsonBtn.addEventListener("click", () => {
   if (!currentAnalysis) return;
+  const origKey = currentAnalysis.key || "C major";
+  const soundingKey = transposeKey(origKey, transposeSemitones);
+  const shapeKey = transposeKey(soundingKey, -capoFret);
+  const payload = {
+    ...currentAnalysis,
+    transpose: transposeSemitones,
+    capo: capoFret,
+    show_mode: showShapesMode ? "shapes" : "sounding",
+    chord_detail: chordDetailMode,
+    sounding_key: soundingKey,
+    shape_key: shapeKey,
+    beat_chords: (currentAnalysis.beat_chords || []).map((b) => ({
+      ...b,
+      sounding_chord: getSoundingChord(b.chord),
+      shape_chord: getShapeChord(b.chord),
+    })),
+  };
   const slug = (currentAnalysis.title || "chordlens").replace(/[^a-z0-9-_]+/gi, "-").toLowerCase();
-  downloadTextFile(`${slug}-chords.json`, JSON.stringify(currentAnalysis, null, 2), "application/json");
+  downloadTextFile(`${slug}-chords.json`, JSON.stringify(payload, null, 2), "application/json");
+});
+
+function updatePlayAlongUI() {
+  const origKey = currentAnalysis ? currentAnalysis.key : "Unknown";
+  const soundingKey = transposeKey(origKey, transposeSemitones);
+  transposeValEl.textContent = transposeSemitones > 0 ? `+${transposeSemitones}` : String(transposeSemitones);
+  resultingKeyEl.textContent = `Key: ${soundingKey}`;
+  capoSelect.value = String(capoFret);
+  viewShapesBtn.setAttribute("aria-pressed", String(showShapesMode));
+  viewShapesBtn.textContent = showShapesMode ? "Show: Shapes to play" : "Show: Sounding chords";
+
+  if (capoFret > 0 && showShapesMode) {
+    playAlongSummaryEl.textContent = `Capo ${capoFret}: play these shapes. They sound in ${soundingKey}.`;
+  } else if (capoFret > 0) {
+    playAlongSummaryEl.textContent = `Capo ${capoFret} active, showing sounding chords in ${soundingKey}.`;
+  } else {
+    playAlongSummaryEl.textContent = `No capo: showing chords in ${soundingKey}.`;
+  }
+}
+
+transposeDownBtn.addEventListener("click", () => {
+  if (transposeSemitones > -11) {
+    transposeSemitones -= 1;
+    capoSuggestionBox.hidden = true;
+    if (currentAnalysis) {
+      renderAnalysis(currentAnalysis);
+      updatePlayhead();
+    }
+  }
+});
+
+transposeUpBtn.addEventListener("click", () => {
+  if (transposeSemitones < 11) {
+    transposeSemitones += 1;
+    capoSuggestionBox.hidden = true;
+    if (currentAnalysis) {
+      renderAnalysis(currentAnalysis);
+      updatePlayhead();
+    }
+  }
+});
+
+transposeResetBtn.addEventListener("click", () => {
+  transposeSemitones = 0;
+  capoFret = 0;
+  capoSuggestionBox.hidden = true;
+  if (currentAnalysis) {
+    renderAnalysis(currentAnalysis);
+    updatePlayhead();
+  }
+});
+
+capoSelect.addEventListener("change", () => {
+  capoFret = Number(capoSelect.value) || 0;
+  capoSuggestionBox.hidden = true;
+  if (currentAnalysis) {
+    renderAnalysis(currentAnalysis);
+    updatePlayhead();
+  }
+});
+
+viewShapesBtn.addEventListener("click", () => {
+  showShapesMode = !showShapesMode;
+  if (currentAnalysis) {
+    renderAnalysis(currentAnalysis);
+    updatePlayhead();
+  }
+});
+
+suggestCapoBtn.addEventListener("click", () => {
+  if (!currentAnalysis || !currentAnalysis.beat_chords) return;
+  const origKey = currentAnalysis.key || "C major";
+  const soundingKey = transposeKey(origKey, transposeSemitones);
+  const beats = currentAnalysis.beat_chords;
+
+  let bestFret = 0;
+  let bestScore = -1;
+  let bestPreview = [];
+
+  for (let fret = 0; fret <= 7; fret += 1) {
+    const shapeKey = transposeKey(soundingKey, -fret);
+    let openCount = 0;
+    const uniqueShapes = [];
+    for (const b of beats) {
+      const shape = simplifyChord(transposeChord(b.chord, transposeSemitones - fret, shapeKey));
+      if (OPEN_GUITAR_CHORDS.has(shape)) {
+        openCount += 1;
+      }
+      if (shape !== "N" && !uniqueShapes.includes(shape) && uniqueShapes.length < 4) {
+        uniqueShapes.push(shape);
+      }
+    }
+    if (openCount > bestScore) {
+      bestScore = openCount;
+      bestFret = fret;
+      bestPreview = uniqueShapes;
+    }
+  }
+
+  suggestedCapoFret = bestFret;
+  const pct = beats.length > 0 ? Math.round((bestScore / beats.length) * 100) : 0;
+  const label = bestFret === 0 ? "No capo" : `Capo ${bestFret}`;
+  capoSuggestionText.textContent = `${label} gives ${bestPreview.join(", ")} (${pct}% open chords).`;
+  applyCapoBtn.textContent = `Apply ${label}`;
+  capoSuggestionBox.hidden = false;
+});
+
+applyCapoBtn.addEventListener("click", () => {
+  if (suggestedCapoFret === null) return;
+  capoFret = suggestedCapoFret;
+  showShapesMode = true;
+  capoSuggestionBox.hidden = true;
+  if (currentAnalysis) {
+    renderAnalysis(currentAnalysis);
+    updatePlayhead();
+  }
 });
 
 exportTxtBtn.addEventListener("click", () => {

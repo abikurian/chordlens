@@ -163,6 +163,48 @@
         </div>
       </div>
 
+      <div id="play-along-panel" class="play-along-panel" hidden>
+        <div class="play-along-row">
+          <div class="play-along-group" role="group" aria-label="Transpose">
+            <span class="play-along-label">Transpose</span>
+            <button type="button" id="transpose-down-btn" class="btn btn-secondary btn-sm btn-icon" aria-label="Transpose down one semitone">-</button>
+            <span id="transpose-val" class="play-along-value">0</span>
+            <button type="button" id="transpose-up-btn" class="btn btn-secondary btn-sm btn-icon" aria-label="Transpose up one semitone">+</button>
+            <button type="button" id="transpose-reset-btn" class="btn btn-secondary btn-sm">Reset</button>
+            <span id="resulting-key" class="play-along-key">Key: —</span>
+          </div>
+
+          <div class="play-along-group">
+            <label for="capo-select" class="play-along-label">Capo</label>
+            <select id="capo-select" class="capo-select">
+              <option value="0">No capo</option>
+              <option value="1">1</option>
+              <option value="2">2</option>
+              <option value="3">3</option>
+              <option value="4">4</option>
+              <option value="5">5</option>
+              <option value="6">6</option>
+              <option value="7">7</option>
+              <option value="8">8</option>
+              <option value="9">9</option>
+              <option value="10">10</option>
+              <option value="11">11</option>
+              <option value="12">12</option>
+            </select>
+            <button type="button" id="suggest-capo-btn" class="btn btn-secondary btn-sm">Suggest capo</button>
+            <button type="button" id="view-shapes-btn" class="btn btn-secondary btn-sm" aria-pressed="true">Show: Shapes to play</button>
+          </div>
+        </div>
+
+        <div id="capo-suggestion" class="capo-suggestion" hidden>
+          <span id="capo-suggestion-text"></span>
+          <button type="button" id="apply-capo-btn" class="btn btn-primary btn-sm">Apply</button>
+        </div>
+
+        <p id="play-along-summary" class="play-along-note"></p>
+        <p class="play-along-note">Transpose and capo change only the displayed chord names. The audio stays in the original key.</p>
+      </div>
+
       <div id="now-playing-strip" class="now-playing-strip" hidden>
         <div class="now-playing-current">
           <span class="now-playing-label">Now playing</span>
