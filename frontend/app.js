@@ -662,6 +662,7 @@ function renderAnalysis(data) {
         cell.dataset.chordText = shownChord;
       } else {
         cell.dataset.chordText = "";
+        cell.classList.add("beat-held");
       }
 
       cell.addEventListener("click", () => {
@@ -698,7 +699,7 @@ function fitAllChartChords() {
       span.style.fontSize = "";
       continue;
     }
-    fitChordElement(span, text, { minPx: 11 });
+    fitChordElement(span, text, { minPx: 10 });
   }
 }
 

@@ -967,6 +967,12 @@ body {
   color: #ffffff;
 }
 
+.beat-cell.active.beat-held {
+  background: rgba(15, 118, 110, 0.14);
+  border: 1.5px solid var(--accent);
+  color: var(--ink);
+}
+
 .beat-meta {
   display: none;
   font-family: var(--font-body);
@@ -1201,7 +1207,7 @@ body {
   }
 
   .beat-cell {
-    padding: var(--space-1) 2px;
+    padding: var(--space-1) 4px;
   }
 
   .topbar {
