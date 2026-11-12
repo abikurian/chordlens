@@ -15,9 +15,23 @@
   --radius: 8px;
   --font-display: "Space Grotesk", sans-serif;
   --font-body: "IBM Plex Sans", sans-serif;
-  --text-hero: clamp(2.5rem, 5.5vw, 3.6rem);
-  --text-chord: clamp(1.15rem, 1.8vw, 1.4rem);
+
+  /* Spacing scale (4, 8, 12, 16, 24, 32, 48px) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+  --content-max-w: 1120px;
+  --page-gutter: var(--space-6);
+
+  /* Type scale */
+  --text-hero: clamp(2.25rem, 5vw, 3.25rem);
+  --text-chord: clamp(1.125rem, 1.7vw, 1.375rem);
   --text-body: 0.9375rem;
+  --text-caption: 0.8125rem;
 }
 
 *,
@@ -56,16 +70,17 @@ body {
   z-index: 20;
   background: var(--bg);
   border-bottom: 1px solid var(--rule);
-  padding: 0.75rem 1.5rem;
+  padding: var(--space-3) var(--page-gutter);
 }
 
 .topbar-inner {
-  max-width: 1120px;
+  max-width: var(--content-max-w);
+  width: 100%;
   margin: 0 auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
+  gap: var(--space-4);
 }
 
 .brand-link {
@@ -97,8 +112,9 @@ body {
 }
 
 .song-summary {
-  max-width: 1120px;
-  margin: 0.25rem auto 0;
+  max-width: var(--content-max-w);
+  width: 100%;
+  margin: var(--space-1) auto 0;
   color: var(--ink-muted);
   font-size: var(--text-body);
   font-variant-numeric: tabular-nums;
@@ -208,9 +224,9 @@ body {
 
 /* Workspace */
 .workspace {
-  max-width: 1120px;
+  max-width: calc(var(--content-max-w) + 2 * var(--page-gutter));
   margin: 0 auto;
-  padding: 2rem 1.5rem 4rem;
+  padding: var(--space-6) var(--page-gutter) var(--space-12);
 }
 
 /* Input / initial screen */
@@ -363,11 +379,12 @@ body {
   z-index: 20;
   background: var(--bg);
   border-bottom: 1px solid var(--rule);
-  padding: 0.75rem 1.5rem 0.65rem;
+  padding: var(--space-3) var(--page-gutter) var(--space-2);
 }
 
 .player-dock > * {
-  max-width: 1120px;
+  max-width: var(--content-max-w);
+  width: 100%;
   margin-left: auto;
   margin-right: auto;
 }
@@ -377,10 +394,12 @@ body {
   height: calc(100dvh - var(--topbar-h, 88px) - var(--dock-h, 260px));
   overflow-y: auto;
   overflow-anchor: none;
-  padding: 1rem 0.25rem 2.5rem 0;
+  padding: var(--space-4) var(--space-1) var(--space-8);
+  margin-left: calc(-1 * var(--space-1));
+  margin-right: calc(-1 * var(--space-1));
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: var(--space-6);
 }
 
 /* Now playing strip */
@@ -388,10 +407,10 @@ body {
   background: var(--surface);
   border: 1px solid var(--rule);
   border-radius: var(--radius);
-  padding: 1rem 1.25rem;
+  padding: var(--space-4) var(--space-6);
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: var(--space-3);
 }
 
 .np-main-row {
@@ -1107,23 +1126,27 @@ body {
 
 /* Responsive: 4 bars per row on tablets (768px+) and desktop, 2 bars per row on phones */
 @media (max-width: 767px) {
+  :root {
+    --page-gutter: var(--space-3);
+  }
+
   .lead-sheet,
   .follow-row {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 1.25rem 0;
+    gap: var(--space-4) 0;
   }
 
   .bar-card {
     min-width: 0;
-    padding: 0.4rem 0.5rem;
+    padding: var(--space-2);
   }
 
   .beat-cell {
-    padding: 0.2rem 0.1rem;
+    padding: var(--space-1) 2px;
   }
 
   .topbar {
-    padding: 0.5rem max(0.75rem, env(safe-area-inset-right)) 0.5rem max(0.75rem, env(safe-area-inset-left));
+    padding: var(--space-2) max(var(--page-gutter), env(safe-area-inset-right)) var(--space-2) max(var(--page-gutter), env(safe-area-inset-left));
   }
 
   .brand-logo {
@@ -1132,11 +1155,11 @@ body {
   }
 
   .btn-sm {
-    padding: 0.4rem 0.65rem;
+    padding: var(--space-2) var(--space-3);
   }
 
   .workspace {
-    padding: 1rem 0.85rem 2.5rem;
+    padding: var(--space-4) var(--page-gutter) var(--space-8);
   }
 
   .input-view {
