@@ -3,241 +3,105 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="theme-color" content="#0F766E" />
-  <title>ChordLens — Audio Chord &amp; Beat Analysis</title>
-  <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#0f766e" />
+  <title>ChordLens</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link
-    href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap"
-    rel="stylesheet"
-  />
-  <link rel="stylesheet" href="/styles.css?v=20261112d" />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css?v=20261112e" />
 </head>
 <body>
   <header class="topbar">
     <div class="topbar-inner">
-      <div class="brand">
-        <svg class="brand-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <rect x="3" y="10" width="3" height="8" rx="1" fill="currentColor" />
-          <rect x="8.5" y="5" width="3" height="14" rx="1" fill="currentColor" />
-          <rect x="14" y="8" width="3" height="11" rx="1" fill="currentColor" />
-          <rect x="19.5" y="4" width="1.5" height="16" rx="0.75" fill="#0F766E" />
-        </svg>
-        <span class="brand-name">ChordLens</span>
+      <button type="button" id="brand-home-btn" class="brand-btn" title="ChordLens">ChordLens</button>
+      <div class="topbar-actions">
+        <button type="button" id="settings-btn" class="btn btn-secondary btn-sm settings-trigger" aria-expanded="false" aria-controls="settings-drawer">
+          Settings
+          <span id="settings-dot" class="settings-dot" hidden aria-label="Custom settings active"></span>
+        </button>
+        <div class="export-menu-wrap">
+          <button type="button" id="export-btn" class="btn btn-secondary btn-sm" aria-expanded="false" aria-haspopup="menu" disabled>
+            Export
+          </button>
+          <div id="export-menu" class="export-menu" role="menu" hidden>
+            <button type="button" id="export-txt-btn" class="export-menu-item" role="menuitem">Export chord sheet (.txt)</button>
+            <button type="button" id="export-json-btn" class="export-menu-item" role="menuitem">Export JSON (.json)</button>
+          </div>
+        </div>
       </div>
-      <p class="topbar-note">Lead-sheet chord, beat, tempo, and key analysis</p>
     </div>
+    <p id="song-summary" class="song-summary" hidden></p>
   </header>
 
   <main class="workspace">
-    <aside class="control-rail" aria-label="Audio input and playback">
-      <section class="panel">
-        <h1 class="panel-title">Analyze a track</h1>
-        <p class="panel-desc">Upload an audio file or paste a YouTube link to generate a 4-beat lead sheet.</p>
+    <section id="input-view" class="input-view" aria-label="Analyze a song">
+      <p class="input-lead">Drop an audio file or paste a YouTube link to see its chords.</p>
 
-        <fieldset class="mode-fieldset">
-          <legend class="field-label">Analysis mode</legend>
-          <div class="mode-options">
+      <div class="input-grid">
+        <form id="upload-form" class="input-block">
+          <label for="audio-file" class="field-label">Audio file</label>
+          <div class="input-row">
+            <input type="file" id="audio-file" name="file" accept=".mp3,.wav,.flac,.m4a,.ogg" class="file-input" required />
+            <button type="submit" id="upload-btn" class="btn btn-primary">Analyze</button>
+          </div>
+        </form>
+
+        <form id="url-form" class="input-block">
+          <label for="youtube-url" class="field-label">YouTube link</label>
+          <div class="input-row">
+            <input type="url" id="youtube-url" name="url" placeholder="https://www.youtube.com/watch?v=..." class="text-input" required />
+            <button type="submit" id="url-btn" class="btn btn-primary">Analyze</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="input-options-wrap">
+        <button type="button" id="input-options-btn" class="text-toggle-btn" aria-expanded="false" aria-controls="input-options-panel">
+          Options
+        </button>
+        <div id="input-options-panel" class="input-options-panel" hidden>
+          <fieldset class="mode-fieldset">
+            <legend class="field-label">Analysis mode</legend>
             <label class="mode-option">
               <input type="radio" name="analysis-mode" value="fast" checked />
-              <span>
-                <strong>Fast</strong>
-                <small>Full-mix BTC (~15–30s)</small>
-              </span>
+              <span>Fast (full mix)</span>
             </label>
             <label class="mode-option">
               <input type="radio" name="analysis-mode" value="accurate" />
-              <span>
-                <strong>Accurate</strong>
-                <small>Demucs stems + BTC (~5–11 min on CPU)</small>
-              </span>
+              <span>Accurate (stems + neural chord model)</span>
             </label>
-          </div>
-        </fieldset>
-
-        <form id="upload-form" class="input-group">
-          <label for="audio-file" class="field-label">Audio file (MP3, WAV, M4A, FLAC)</label>
-          <input
-            id="audio-file"
-            name="file"
-            type="file"
-            accept=".mp3,.wav,.m4a,.flac,audio/*"
-            class="file-input"
-            required
-          />
-          <button type="submit" id="upload-btn" class="btn btn-primary">
-            Analyze audio file
-          </button>
-        </form>
-
-        <div class="divider" role="separator"><span>or</span></div>
-
-        <form id="url-form" class="input-group">
-          <label for="youtube-url" class="field-label">YouTube link</label>
-          <input
-            id="youtube-url"
-            name="url"
-            type="url"
-            placeholder="https://www.youtube.com/watch?v=..."
-            class="text-input"
-            required
-          />
-          <button type="submit" id="url-btn" class="btn btn-secondary">
-            Analyze YouTube link
-          </button>
-        </form>
-
-        <div id="status-banner" class="status-banner" role="status" aria-live="polite" hidden></div>
-      </section>
-
-      <section id="player-panel" class="panel" hidden>
-        <div class="player-header">
-          <h2 id="track-title" class="track-title">Untitled track</h2>
-          <span id="pipeline-badge" class="pipeline-tag"></span>
-        </div>
-
-        <audio id="audio-player" controls class="audio-player" preload="metadata"></audio>
-
-        <dl class="meta-grid">
-          <div class="meta-item">
-            <dt>Key</dt>
-            <dd id="meta-key">—</dd>
-          </div>
-          <div class="meta-item">
-            <dt>Tempo</dt>
-            <dd id="meta-tempo">—</dd>
-          </div>
-          <div class="meta-item">
-            <dt>Time</dt>
-            <dd id="meta-time">—</dd>
-          </div>
-          <div class="meta-item">
-            <dt>Length</dt>
-            <dd id="meta-duration">—</dd>
-          </div>
-          <div class="meta-item meta-item-wide">
-            <dt>Beat engine</dt>
-            <dd id="meta-beat-engine">—</dd>
-          </div>
-        </dl>
-      </section>
-    </aside>
-
-    <section class="chart-stage" aria-label="Lead-sheet chord chart">
-      <div class="chart-header">
-        <div>
-          <h2 class="chart-title">Lead sheet</h2>
-          <p id="chart-subtitle" class="chart-subtitle">
-            Upload a track or paste a YouTube URL to view bars and chords.
-          </p>
-        </div>
-        <div class="chart-actions">
-          <div class="chart-legend" aria-label="Chart legend">
-            <span class="legend-item">
-              <span class="legend-swatch swatch-active" aria-hidden="true"></span>
-              Playing
-            </span>
-            <span class="legend-item">
-              <span class="legend-swatch swatch-low" aria-hidden="true"></span>
-              Low model confidence (&lt;55%)
-            </span>
-          </div>
-          <div id="chart-toolbar" class="chart-toolbar" hidden>
-            <button type="button" id="guitar-shapes-btn" class="btn btn-secondary btn-sm" aria-pressed="true">
-              Show guitar shapes
-            </button>
-            <button type="button" id="follow-mode-btn" class="btn btn-secondary btn-sm" aria-pressed="false">
-              Follow mode
-            </button>
-            <button type="button" id="chord-detail-btn" class="btn btn-secondary btn-sm" aria-pressed="false">
-              Chords: Simple
-            </button>
-            <button type="button" id="more-detail-btn" class="btn btn-secondary btn-sm" aria-pressed="false">
-              More detail
-            </button>
-            <button type="button" id="edit-mode-btn" class="btn btn-secondary btn-sm" aria-pressed="false">
-              Edit chords
-            </button>
-            <button type="button" id="export-json-btn" class="btn btn-secondary btn-sm">
-              Export JSON
-            </button>
-            <button type="button" id="export-txt-btn" class="btn btn-secondary btn-sm">
-              Export chord sheet
-            </button>
-          </div>
+          </fieldset>
         </div>
       </div>
 
-      <div id="play-along-panel" class="play-along-panel">
-        <div class="play-along-row">
-          <div class="play-along-group" role="group" aria-label="Transpose">
-            <span class="play-along-label">Transpose</span>
-            <button type="button" id="transpose-down-btn" class="btn btn-secondary btn-sm btn-icon" aria-label="Transpose down one semitone" disabled>-</button>
-            <span id="transpose-val" class="play-along-value">0</span>
-            <button type="button" id="transpose-up-btn" class="btn btn-secondary btn-sm btn-icon" aria-label="Transpose up one semitone" disabled>+</button>
-            <button type="button" id="transpose-reset-btn" class="btn btn-secondary btn-sm" disabled>Reset</button>
-            <span id="resulting-key" class="play-along-key">Key: —</span>
-          </div>
+      <p id="status-banner" class="status-line" role="status" aria-live="polite" hidden></p>
+    </section>
 
-          <div class="play-along-group">
-            <label for="capo-select" class="play-along-label">Capo</label>
-            <select id="capo-select" class="capo-select" disabled>
-              <option value="0">No capo</option>
-              <option value="1">1</option>
-              <option value="2">2</option>
-              <option value="3">3</option>
-              <option value="4">4</option>
-              <option value="5">5</option>
-              <option value="6">6</option>
-              <option value="7">7</option>
-              <option value="8">8</option>
-              <option value="9">9</option>
-              <option value="10">10</option>
-              <option value="11">11</option>
-              <option value="12">12</option>
-            </select>
-            <button type="button" id="suggest-capo-btn" class="btn btn-secondary btn-sm" disabled>Suggest capo</button>
-            <button type="button" id="view-shapes-btn" class="btn btn-secondary btn-sm" aria-pressed="true" disabled>Show: Shapes to play</button>
-          </div>
-        </div>
+    <section id="results-view" class="results-view" aria-label="Chord chart" hidden>
+      <audio id="audio-player" preload="metadata"></audio>
 
-        <div id="capo-suggestion" class="capo-suggestion" hidden>
-          <span id="capo-suggestion-text"></span>
-          <button type="button" id="apply-capo-btn" class="btn btn-primary btn-sm">Apply</button>
-        </div>
-
-        <p id="play-along-summary" class="play-along-note">Analyze a song to use transpose and capo.</p>
-        <p class="play-along-note">Transpose and capo change only the displayed chord names. The audio stays in the original key.</p>
-      </div>
-
-      <div id="now-playing-strip" class="now-playing-strip" hidden>
-        <div class="np-top-row">
-          <button type="button" id="np-current-btn" class="np-chord-btn" aria-haspopup="dialog" title="Tap for alternate shapes and notes">
+      <section id="now-playing-strip" class="now-playing-strip" aria-label="Now playing">
+        <div class="np-main-row">
+          <button type="button" id="np-current-btn" class="np-current-btn" aria-haspopup="dialog" title="Tap for alternate guitar shapes">
             <div class="np-chord-text">
-              <span class="now-playing-label">Now playing</span>
+              <span class="np-caption">Now</span>
               <strong id="now-playing-chord" class="now-playing-chord">—</strong>
-              <span id="np-simplified-tag" class="np-simplified-tag" hidden>simplified shape</span>
+              <span id="np-simplified-tag" class="np-simplified-tag" hidden>simplified</span>
             </div>
             <div id="np-current-diagram" class="np-diagram"></div>
           </button>
 
           <button type="button" id="np-next-btn" class="np-next-btn" title="Tap to jump to next chord">
             <div class="np-chord-text">
-              <span class="now-playing-label">Next</span>
+              <span class="np-caption">Next</span>
               <strong id="now-playing-next-chord" class="now-playing-next-chord">—</strong>
               <span id="now-playing-countdown" class="now-playing-countdown"></span>
             </div>
-            <div id="np-next-diagram" class="np-diagram np-diagram-sm"></div>
           </button>
-
-          <div class="np-upcoming-wrap">
-            <span class="now-playing-label">Then</span>
-            <div id="np-upcoming" class="np-upcoming">—</div>
-          </div>
         </div>
 
-        <div class="np-beat-row">
+        <div class="np-progress-row">
           <div id="np-beat-dots" class="np-beat-dots" aria-label="Beat in bar">
             <span class="beat-dot" data-beat="0">1</span>
             <span class="beat-dot" data-beat="1">2</span>
@@ -250,33 +114,17 @@
           <span id="np-time-readout" class="np-time-readout">0:00 / 0:00</span>
         </div>
 
-        <div class="np-controls-row">
-          <div class="np-transport">
-            <button type="button" id="np-prev-bar-btn" class="btn btn-secondary btn-sm" aria-label="Previous bar">Prev bar</button>
-            <button type="button" id="np-play-btn" class="btn btn-primary btn-sm">Play</button>
-            <button type="button" id="np-next-bar-btn" class="btn btn-secondary btn-sm" aria-label="Next bar">Next bar</button>
-          </div>
-
+        <div class="np-transport-row">
+          <button type="button" id="np-play-btn" class="btn btn-primary np-play-btn">Play</button>
           <input type="range" id="np-seek-slider" class="np-seek-slider" min="0" max="1000" value="0" aria-label="Seek audio position" />
-
-          <div class="np-practice">
-            <div class="np-speed-group" role="group" aria-label="Playback speed">
-              <button type="button" class="btn btn-secondary btn-sm speed-btn" data-speed="0.5" aria-pressed="false">0.5x</button>
-              <button type="button" class="btn btn-secondary btn-sm speed-btn" data-speed="0.75" aria-pressed="false">0.75x</button>
-              <button type="button" class="btn btn-secondary btn-sm speed-btn" data-speed="1" aria-pressed="true">1x</button>
-            </div>
-            <button type="button" id="np-loop-btn" class="btn btn-secondary btn-sm" aria-pressed="false">Loop 4 bars</button>
-            <button type="button" id="jump-to-bar-btn" class="btn btn-secondary btn-sm" hidden>
-              Jump to current bar
-            </button>
-          </div>
+          <button type="button" id="jump-to-bar-btn" class="btn btn-secondary btn-sm" hidden>Current bar</button>
         </div>
-      </div>
+      </section>
 
       <div id="chord-popover" class="chord-popover" role="dialog" aria-modal="false" aria-labelledby="popover-title" hidden>
         <div class="popover-head">
           <div>
-            <h3 id="popover-title" class="popover-title">—</h3>
+            <h2 id="popover-title" class="popover-title">—</h2>
             <p id="popover-notes" class="popover-notes"></p>
           </div>
           <button type="button" id="popover-close-btn" class="btn btn-secondary btn-sm">Close</button>
@@ -286,25 +134,101 @@
 
       <div id="follow-teleprompter" class="follow-teleprompter" aria-label="Follow mode teleprompter" hidden></div>
 
-      <div id="chart-empty" class="chart-empty">
-        <p class="empty-heading">Ready for a song</p>
-        <p class="empty-copy">
-          Bars are grouped 4 beats per measure. Once analyzed, click any bar to jump the audio player to that beat.
-        </p>
-      </div>
-
       <div id="section-strip" class="section-strip" aria-label="Estimated song sections" hidden></div>
       <div id="lead-sheet" class="lead-sheet" hidden></div>
     </section>
   </main>
 
-  <footer class="site-footer">
-    <span>ChordLens</span>
-    <span>Build 2026-11-12</span>
-  </footer>
+  <div id="settings-backdrop" class="settings-backdrop" hidden></div>
+  <aside id="settings-drawer" class="settings-drawer" role="dialog" aria-modal="true" aria-labelledby="settings-title" hidden>
+    <div class="settings-head">
+      <h2 id="settings-title" class="settings-title">Settings</h2>
+      <button type="button" id="settings-close-btn" class="btn btn-secondary btn-sm" aria-label="Close settings">Close</button>
+    </div>
 
-  <script src="/chordShapes.js?v=20261112d"></script>
-  <script src="/app.js?v=20261112d"></script>
+    <div class="settings-body">
+      <section class="settings-group" aria-labelledby="settings-chords-heading">
+        <h3 id="settings-chords-heading" class="settings-group-title">Chords</h3>
+        <div class="settings-control-row">
+          <button type="button" id="chord-detail-btn" class="btn btn-secondary btn-sm" aria-pressed="false">Chords: Simple</button>
+          <button type="button" id="guitar-shapes-btn" class="btn btn-secondary btn-sm" aria-pressed="true">Guitar shapes: On</button>
+        </div>
+        <div class="settings-control-row">
+          <button type="button" id="view-shapes-btn" class="btn btn-secondary btn-sm" aria-pressed="true" disabled>Show: Shapes to play</button>
+        </div>
+      </section>
+
+      <section class="settings-group" aria-labelledby="settings-key-heading">
+        <h3 id="settings-key-heading" class="settings-group-title">Key</h3>
+        <div class="settings-control-row">
+          <span class="settings-label">Transpose</span>
+          <div class="transpose-controls" role="group" aria-label="Transpose">
+            <button type="button" id="transpose-down-btn" class="btn btn-secondary btn-sm btn-icon" aria-label="Transpose down one semitone" disabled>-</button>
+            <span id="transpose-val" class="transpose-val">0</span>
+            <button type="button" id="transpose-up-btn" class="btn btn-secondary btn-sm btn-icon" aria-label="Transpose up one semitone" disabled>+</button>
+            <button type="button" id="transpose-reset-btn" class="btn btn-secondary btn-sm" disabled>Reset</button>
+          </div>
+          <span id="resulting-key" class="settings-meta">Key: —</span>
+        </div>
+
+        <div class="settings-control-row">
+          <label for="capo-select" class="settings-label">Capo</label>
+          <select id="capo-select" class="capo-select" disabled>
+            <option value="0">No capo</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+            <option value="6">6</option>
+            <option value="7">7</option>
+            <option value="8">8</option>
+            <option value="9">9</option>
+            <option value="10">10</option>
+            <option value="11">11</option>
+            <option value="12">12</option>
+          </select>
+          <button type="button" id="suggest-capo-btn" class="btn btn-secondary btn-sm" disabled>Suggest capo</button>
+        </div>
+
+        <div id="capo-suggestion" class="capo-suggestion" hidden>
+          <span id="capo-suggestion-text"></span>
+          <button type="button" id="apply-capo-btn" class="btn btn-primary btn-sm">Apply</button>
+        </div>
+
+        <p class="settings-note">Transpose and capo change only the chord names. The audio stays in the original key.</p>
+      </section>
+
+      <section class="settings-group" aria-labelledby="settings-practice-heading">
+        <h3 id="settings-practice-heading" class="settings-group-title">Practice</h3>
+        <div class="settings-control-row">
+          <span class="settings-label">Speed</span>
+          <div class="speed-group" role="group" aria-label="Playback speed">
+            <button type="button" class="btn btn-secondary btn-sm speed-btn" data-speed="0.5" aria-pressed="false">0.5x</button>
+            <button type="button" class="btn btn-secondary btn-sm speed-btn" data-speed="0.75" aria-pressed="false">0.75x</button>
+            <button type="button" class="btn btn-secondary btn-sm speed-btn" data-speed="1" aria-pressed="true">1x</button>
+          </div>
+        </div>
+        <div class="settings-control-row">
+          <button type="button" id="np-loop-btn" class="btn btn-secondary btn-sm" aria-pressed="false">Loop 4 bars</button>
+          <button type="button" id="follow-mode-btn" class="btn btn-secondary btn-sm" aria-pressed="false">Follow mode</button>
+        </div>
+      </section>
+
+      <section class="settings-group" aria-labelledby="settings-more-heading">
+        <h3 id="settings-more-heading" class="settings-group-title">More</h3>
+        <div class="settings-control-row">
+          <button type="button" id="more-detail-btn" class="btn btn-secondary btn-sm" aria-pressed="false">Show details</button>
+          <button type="button" id="edit-mode-btn" class="btn btn-secondary btn-sm" aria-pressed="false" disabled>Edit chords</button>
+        </div>
+        <div class="settings-control-row">
+          <button type="button" id="new-song-btn" class="btn btn-secondary btn-sm" hidden>Analyze another song</button>
+        </div>
+      </section>
+    </div>
+  </aside>
+
+  <script src="/chordShapes.js?v=20261112e"></script>
+  <script src="/app.js?v=20261112e"></script>
 </body>
 </html>
-
