@@ -47,6 +47,8 @@ function clearStatus() {
 function setLoading(isLoading, message = "") {
   uploadBtn.disabled = isLoading;
   urlBtn.disabled = isLoading;
+  uploadForm.setAttribute("aria-busy", String(isLoading));
+  urlForm.setAttribute("aria-busy", String(isLoading));
   if (isLoading && message) {
     setStatus(message, "info");
   }
@@ -66,10 +68,13 @@ function renderAnalysis(data) {
   playerPanel.hidden = false;
 
   const beatChords = data.beat_chords || [];
+  const chords = data.chords || [];
   const beatsPerBar = 4;
   const totalBars = Math.ceil(beatChords.length / beatsPerBar);
+  const lastChord = chords.length > 0 ? chords[chords.length - 1] : null;
+  const endsSummary = lastChord ? ` · Ends on ${lastChord.chord} (${formatTime(lastChord.end)})` : "";
 
-  chartSubtitle.textContent = `${totalBars} bars · ${beatChords.length} beats · Click any beat to jump`;
+  chartSubtitle.textContent = `${totalBars} bars · ${beatChords.length} beats${endsSummary} · Click any beat to jump`;
   chartEmpty.hidden = true;
   leadSheetEl.hidden = false;
   leadSheetEl.innerHTML = "";
@@ -108,7 +113,8 @@ function renderAnalysis(data) {
       }
 
       const prevBeat = beat.beat_index > 0 ? beatChords[beat.beat_index - 1] : null;
-      const isRepeat = prevBeat && prevBeat.chord === beat.chord && offset > 0;
+      const isLastBeat = beat.beat_index === beatChords.length - 1;
+      const isRepeat = prevBeat && prevBeat.chord === beat.chord && offset > 0 && !isLastBeat;
       const confPct = Math.round((beat.confidence || 0) * 100);
 
       if (beat.low_confidence) {
@@ -117,11 +123,11 @@ function renderAnalysis(data) {
 
       cell.setAttribute(
         "aria-label",
-        `Bar ${barIdx + 1} beat ${offset + 1}, chord ${beat.chord}, confidence ${confPct}%`
+        `Bar ${barIdx + 1} beat ${offset + 1}, chord ${beat.chord}, confidence ${confPct}%${beat.low_confidence ? ", low confidence" : ""}`
       );
       cell.innerHTML = `
         <span class="beat-chord ${isRepeat ? "is-repeat" : ""}">${isRepeat ? "·" : beat.chord}</span>
-        <span class="beat-conf">${confPct}%</span>
+        <span class="beat-conf">${confPct}%${beat.low_confidence ? " ?" : ""}</span>
       `;
 
       cell.addEventListener("click", () => {
@@ -211,7 +217,15 @@ uploadForm.addEventListener("submit", async (event) => {
       throw new Error(data.detail || "Could not analyze this audio file.");
     }
     renderAnalysis(data);
-    setStatus(`Analyzed "${data.title}" (${data.key}, ${data.tempo} BPM).`, "success");
+    const lastEnd = data.chords && data.chords.length ? data.chords[data.chords.length - 1].end : 0;
+    if (data.duration > 5 && lastEnd < data.duration - 3.0) {
+      setStatus(
+        `Analysis stopped early at ${formatTime(lastEnd)} of ${formatTime(data.duration)}. Try converting the file to WAV and re-uploading.`,
+        "error"
+      );
+    } else {
+      setStatus(`Analyzed "${data.title}" (${data.key}, ${data.tempo} BPM).`, "success");
+    }
   } catch (err) {
     setStatus(err.message || "Upload failed. Check the file and try again.", "error");
   } finally {
@@ -241,7 +255,15 @@ urlForm.addEventListener("submit", async (event) => {
       throw new Error(data.detail || "Could not analyze this YouTube link.");
     }
     renderAnalysis(data);
-    setStatus(`Analyzed "${data.title}" (${data.key}, ${data.tempo} BPM).`, "success");
+    const lastEnd = data.chords && data.chords.length ? data.chords[data.chords.length - 1].end : 0;
+    if (data.duration > 5 && lastEnd < data.duration - 3.0) {
+      setStatus(
+        `Analysis stopped early at ${formatTime(lastEnd)} of ${formatTime(data.duration)}. Try converting the file to WAV and re-uploading.`,
+        "error"
+      );
+    } else {
+      setStatus(`Analyzed "${data.title}" (${data.key}, ${data.tempo} BPM).`, "success");
+    }
   } catch (err) {
     setStatus(err.message || "YouTube analysis failed. Check the link and try again.", "error");
   } finally {
