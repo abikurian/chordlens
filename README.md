@@ -50,6 +50,12 @@ The **Play along** panel lets you transpose chords (`-11` to `+11` semitones) an
 - **Key-aware spelling:** Sharp keys spell accidentals with sharps (`F#`, `C#`), flat keys spell them with flats (`Bb`, `Eb`), and minor keys follow their relative major — avoiding awkward spellings like `E#` or `Cb`.
 - **Suggest capo:** Scans frets `0–7` to find the capo position with the highest share of open guitar chords (`C`, `G`, `D`, `A`, `E`, `Am`, `Em`, `Dm`) and lets you apply it with one click.
 
+## Guitar Shapes, Follow Mode, Speed, and Loop
+
+- **Guitar chord shapes (`frontend/chordShapes.js`):** Displays standard-tuning (`EADGBe`) open chords and movable E/A-shape barre chords as inline SVG diagrams in the **Now playing** panel (toggleable via **Show guitar shapes**). When a capo is active, diagrams show the fret shapes to play with a **Capo N** bar at the top. Rare chords fall back to a simple triad marked `simplified shape`. Tap the current chord to view its notes and switch between open and barre shapes.
+- **Sticky Now playing & Follow mode:** The **Now playing** panel stays pinned at the top on desktop (bottom on phones) with beat dots (`1–4`), bar progress, transport/seek slider, and upcoming chords. **Follow mode** swaps the full chart for a 4-bar teleprompter.
+- **Practice controls:** Slow down playback to `0.5x` or `0.75x` (with pitch preservation) and use **Loop 4 bars** / **Loop section** to repeat difficult passages.
+
 ## Honest Reporting on Accuracy & Confidence
 
 - **Model confidence is not accuracy:** The percentage shown on each beat is the model's own probability (BTC softmax probability or Phase 1 margin score), not a verified accuracy measurement.
@@ -87,6 +93,7 @@ The **Play along** panel lets you transpose chords (`-11` to `+11` semitones) an
 | **FastAPI / pytest** | [fastapi/fastapi](https://github.com/fastapi/fastapi), [pytest-dev/pytest](https://github.com/pytest-dev/pytest) | MIT | N/A | Personal and public/commercial use allowed |
 | **uvicorn / numpy / scipy / soundfile / httpx** | PyPI | BSD-3-Clause | N/A | Personal and public/commercial use allowed |
 | **python-multipart / huggingface-hub** | PyPI | Apache-2.0 | N/A | Personal and public/commercial use allowed |
+| **Guitar Chord Shapes** | `frontend/chordShapes.js` (own table, standard tuning) | MIT (this repo) | N/A | Personal and public/commercial use allowed |
 | **ffmpeg** *(external binary)* | [ffmpeg.org](https://ffmpeg.org/) | LGPL v2.1+ or GPL v2+/v3+ | Windows `gyan.dev` `full_build` is GPL v3 | Personal use OK; if bundling `ffmpeg` in a public release, verify LGPL vs GPL build terms |
 
 ## Notice
