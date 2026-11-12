@@ -55,7 +55,7 @@ A slim **Key** strip directly below **Now playing** lets you transpose chords (`
 - **Guitar chord shapes (`frontend/chordShapes.js`):** Displays standard-tuning (`EADGBe`) open chords and movable E/A-shape barre chords as inline SVG diagrams in the **Now playing** area (toggleable via **Settings → Guitar shapes**). When a capo is active, diagrams show the fret shapes to play with a **Capo N** bar at the top. Rare chords fall back to a simple triad marked `simplified`. Tap the current chord to view its notes and switch between open and barre shapes.
 - **Sticky Now playing & Follow mode:** The **Now playing** strip stays pinned above the chart with the current chord, next chord countdown, beat dots (`1–4`), bar progress, and Play/Pause + seek bar. **Follow mode** (in **Settings → Practice**) swaps the full chart for a 4-bar teleprompter.
 - **Practice controls:** Slow down playback to `0.5x` or `0.75x` (with pitch preservation) and use **Loop 4 bars** in **Settings → Practice** to repeat difficult passages.
-- **Themes & Branding:** Follows `prefers-color-scheme` by default with an **Auto / Light / Stage** dark-theme toggle in **Settings → More**. The header mark and favicon share `frontend/logo.svg`.
+- **Branding:** The header mark and browser tab favicon share `frontend/logo.svg`.
 
 ## Honest Reporting on Accuracy & Confidence
 

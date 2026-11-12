@@ -66,7 +66,6 @@ const followModeBtn = document.getElementById("follow-mode-btn");
 const moreDetailBtn = document.getElementById("more-detail-btn");
 const editModeBtn = document.getElementById("edit-mode-btn");
 const newSongBtn = document.getElementById("new-song-btn");
-const themeBtns = Array.from(document.querySelectorAll(".theme-btn"));
 
 window.addEventListener("error", (event) => {
   console.error("ChordLens UI error:", event.error || event.message);
@@ -109,7 +108,6 @@ let nextChordJumpTime = null;
 let lastDisplayedCurrentChord = null;
 let isSeekingSlider = false;
 let playbackRate = 1;
-let currentTheme = "auto"; // "auto" | "light" | "stage"
 
 // Key-aware spelling tables (never produce E#, B#, Fb, or Cb)
 const NOTE_TO_PC = {
@@ -239,16 +237,8 @@ function updateSettingsDot() {
     loopRange !== null ||
     followMode ||
     showMoreDetail ||
-    isEditMode ||
-    currentTheme !== "auto";
+    isEditMode;
   settingsDot.hidden = !nonDefault;
-}
-
-function applyTheme(theme) {
-  currentTheme = theme;
-  document.documentElement.dataset.theme = theme;
-  themeBtns.forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.theme === theme)));
-  updateSettingsDot();
 }
 
 function openSettingsDrawer() {
@@ -812,14 +802,6 @@ brandHomeBtn.addEventListener("click", (event) => {
     showInputView();
   }
 });
-
-themeBtns.forEach((btn) => {
-  btn.addEventListener("click", () => {
-    applyTheme(btn.dataset.theme || "auto");
-  });
-});
-
-applyTheme("auto");
 
 newSongBtn.addEventListener("click", showInputView);
 
