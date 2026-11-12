@@ -17,6 +17,7 @@ from pydantic import BaseModel
 
 from backend.analyze import analyze_audio
 from backend.ffmpeg_utils import friendly_error_message, log_startup_toolchain
+from backend.version import get_version
 from backend.youtube import download_youtube_audio, normalize_youtube_url
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -30,7 +31,7 @@ ALLOWED_EXTENSIONS = {".mp3", ".wav", ".m4a", ".flac"}
 EXECUTOR = ThreadPoolExecutor(max_workers=2)
 JOBS: dict[str, dict[str, Any]] = {}
 
-app = FastAPI(title="ChordLens", version="0.2.0")
+app = FastAPI(title="ChordLens", version=get_version())
 
 
 @app.on_event("startup")
@@ -101,7 +102,7 @@ def favicon() -> FileResponse:
 
 @app.get("/api/health")
 def health() -> dict[str, str]:
-    return {"status": "ok"}
+    return {"status": "ok", "version": get_version()}
 
 
 @app.post("/api/analyze")

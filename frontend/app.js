@@ -1865,3 +1865,95 @@ urlForm.addEventListener("submit", async (event) => {
     setLoading(false);
   }
 });
+
+const aboutAppVersionEl = document.getElementById("about-app-version");
+const aboutDiagnosticsEl = document.getElementById("about-diagnostics");
+const openDataDirBtn = document.getElementById("open-data-dir-btn");
+const clearCacheBtn = document.getElementById("clear-cache-btn");
+const updateYtdlpBtn = document.getElementById("update-ytdlp-btn");
+const cacheActionStatusEl = document.getElementById("cache-action-status");
+
+async function loadAppHealthAndDiagnostics() {
+  try {
+    const res = await fetch("/api/health");
+    if (!res.ok) return;
+    const data = await res.json();
+    if (aboutAppVersionEl && data.version) {
+      aboutAppVersionEl.textContent = data.version;
+    }
+    if (aboutDiagnosticsEl) {
+      const parts = [];
+      if (data.ffmpeg) parts.push(`ffmpeg: ${data.ffmpeg}`);
+      if (data.yt_dlp) parts.push(`yt-dlp: ${data.yt_dlp}`);
+      if (data.models) parts.push(`models: ${data.models}`);
+      if (parts.length > 0) {
+        aboutDiagnosticsEl.textContent = parts.join(" · ");
+      }
+    }
+  } catch {
+    // Keep defaults
+  }
+}
+
+if (openDataDirBtn) {
+  openDataDirBtn.addEventListener("click", async () => {
+    try {
+      const res = await fetch("/api/system/open-data-dir", { method: "POST" });
+      const data = await res.json();
+      if (cacheActionStatusEl) {
+        cacheActionStatusEl.hidden = false;
+        cacheActionStatusEl.textContent = data.detail || (res.ok ? "Opened folder" : "Could not open folder");
+      }
+    } catch (err) {
+      if (cacheActionStatusEl) {
+        cacheActionStatusEl.hidden = false;
+        cacheActionStatusEl.textContent = err.message || "Failed to open folder";
+      }
+    }
+  });
+}
+
+if (clearCacheBtn) {
+  clearCacheBtn.addEventListener("click", async () => {
+    try {
+      const res = await fetch("/api/system/clear-cache", { method: "POST" });
+      const data = await res.json();
+      if (cacheActionStatusEl) {
+        cacheActionStatusEl.hidden = false;
+        cacheActionStatusEl.textContent = data.detail || "Cache cleared";
+      }
+    } catch (err) {
+      if (cacheActionStatusEl) {
+        cacheActionStatusEl.hidden = false;
+        cacheActionStatusEl.textContent = err.message || "Failed to clear cache";
+      }
+    }
+  });
+}
+
+if (updateYtdlpBtn) {
+  updateYtdlpBtn.addEventListener("click", async () => {
+    updateYtdlpBtn.disabled = true;
+    if (cacheActionStatusEl) {
+      cacheActionStatusEl.hidden = false;
+      cacheActionStatusEl.textContent = "Updating yt-dlp...";
+    }
+    try {
+      const res = await fetch("/api/system/update-ytdlp", { method: "POST" });
+      const data = await res.json();
+      if (cacheActionStatusEl) {
+        cacheActionStatusEl.textContent = data.detail || (res.ok ? "yt-dlp updated" : "Update failed");
+      }
+      loadAppHealthAndDiagnostics();
+    } catch (err) {
+      if (cacheActionStatusEl) {
+        cacheActionStatusEl.textContent = err.message || "Failed to update yt-dlp";
+      }
+    } finally {
+      updateYtdlpBtn.disabled = false;
+    }
+  });
+}
+
+loadAppHealthAndDiagnostics();
+

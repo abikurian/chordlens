@@ -1041,6 +1041,27 @@ body {
   padding-top: 1.25rem;
 }
 
+.about-version-line {
+  margin: 0;
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--text-body);
+}
+
+.about-diagnostics {
+  font-size: var(--text-caption);
+  color: var(--ink-muted);
+  line-height: 1.45;
+  font-variant-numeric: tabular-nums;
+}
+
+.cache-action-status {
+  margin: 0;
+  font-size: var(--text-caption);
+  color: var(--ink-muted);
+}
+
 .settings-group {
   display: flex;
   flex-direction: column;

@@ -269,6 +269,20 @@
           <button type="button" id="new-song-btn" class="btn btn-secondary btn-sm" hidden>Analyze another song</button>
         </div>
       </section>
+
+      <section class="settings-group" aria-labelledby="settings-about-heading">
+        <h3 id="settings-about-heading" class="settings-group-title">About</h3>
+        <p class="about-version-line">ChordLens v<span id="about-app-version">0.1.0</span></p>
+        <div id="about-diagnostics" class="about-diagnostics"></div>
+        <div class="settings-control-row">
+          <button type="button" id="open-data-dir-btn" class="btn btn-secondary btn-sm">Open data folder</button>
+          <button type="button" id="clear-cache-btn" class="btn btn-secondary btn-sm">Clear cache</button>
+        </div>
+        <div class="settings-control-row">
+          <button type="button" id="update-ytdlp-btn" class="btn btn-secondary btn-sm">Update downloader</button>
+        </div>
+        <p id="cache-action-status" class="cache-action-status" hidden></p>
+      </section>
     </div>
   </aside>
 
