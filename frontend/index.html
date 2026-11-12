@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/styles.css?v=20261112h" />
+  <link rel="stylesheet" href="/styles.css?v=20261112i" />
 </head>
 <body>
   <header class="topbar">
@@ -99,7 +99,8 @@
     <section id="results-view" class="results-view" aria-label="Chord chart" hidden>
       <audio id="audio-player" preload="metadata"></audio>
 
-      <section id="now-playing-strip" class="now-playing-strip" aria-label="Now playing">
+      <div id="player-dock" class="player-dock">
+        <section id="now-playing-strip" class="now-playing-strip" aria-label="Now playing">
         <div class="np-main-row">
           <button type="button" id="np-current-btn" class="np-current-btn" aria-haspopup="dialog" title="Tap for alternate guitar shapes">
             <div class="np-chord-text">
@@ -172,26 +173,29 @@
         </div>
       </div>
 
-      <div id="capo-suggestion" class="capo-suggestion" hidden>
-        <span id="capo-suggestion-text"></span>
-        <button type="button" id="apply-capo-btn" class="key-link-btn">Apply</button>
-      </div>
-
-      <div id="chord-popover" class="chord-popover" role="dialog" aria-modal="false" aria-labelledby="popover-title" hidden>
-        <div class="popover-head">
-          <div>
-            <h2 id="popover-title" class="popover-title">—</h2>
-            <p id="popover-notes" class="popover-notes"></p>
-          </div>
-          <button type="button" id="popover-close-btn" class="btn btn-secondary btn-sm">Close</button>
+        <div id="capo-suggestion" class="capo-suggestion" hidden>
+          <span id="capo-suggestion-text"></span>
+          <button type="button" id="apply-capo-btn" class="key-link-btn">Apply</button>
         </div>
-        <div id="popover-shapes" class="popover-shapes"></div>
       </div>
 
-      <div id="follow-teleprompter" class="follow-teleprompter" aria-label="Follow mode teleprompter" hidden></div>
+      <div id="chart-scroll" class="chart-scroll">
+        <div id="chord-popover" class="chord-popover" role="dialog" aria-modal="false" aria-labelledby="popover-title" hidden>
+          <div class="popover-head">
+            <div>
+              <h2 id="popover-title" class="popover-title">—</h2>
+              <p id="popover-notes" class="popover-notes"></p>
+            </div>
+            <button type="button" id="popover-close-btn" class="btn btn-secondary btn-sm">Close</button>
+          </div>
+          <div id="popover-shapes" class="popover-shapes"></div>
+        </div>
 
-      <div id="section-strip" class="section-strip" aria-label="Estimated song sections" hidden></div>
-      <div id="lead-sheet" class="lead-sheet" hidden></div>
+        <div id="follow-teleprompter" class="follow-teleprompter" aria-label="Follow mode teleprompter" hidden></div>
+
+        <div id="section-strip" class="section-strip" aria-label="Estimated song sections" hidden></div>
+        <div id="lead-sheet" class="lead-sheet" hidden></div>
+      </div>
     </section>
   </main>
 
@@ -243,7 +247,7 @@
     </div>
   </aside>
 
-  <script src="/chordShapes.js?v=20261112h"></script>
-  <script src="/app.js?v=20261112h"></script>
+  <script src="/chordShapes.js?v=20261112i"></script>
+  <script src="/app.js?v=20261112i"></script>
 </body>
 </html>

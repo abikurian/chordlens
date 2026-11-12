@@ -41,6 +41,17 @@ YouTube changes its player format frequently. If YouTube downloads start failing
 .\.venv\Scripts\python.exe -m pip install -U yt-dlp
 ```
 
+### ffmpeg troubleshooting
+
+On startup, ChordLens checks `PATH` and common Windows install folders (WinGet, Chocolatey, `C:\ffmpeg\bin`) and prints `ffmpeg`, `ffprobe`, `js_runtime`, and `yt-dlp` status in the terminal. If `ffmpeg` is missing:
+
+1. Install it with:
+   ```powershell
+   winget install Gyan.FFmpeg
+   ```
+2. Close and reopen your terminal, then restart `uvicorn`.
+3. As a fallback for audio-only files, you can also install `imageio-ffmpeg` (`BSD-2-Clause` Python wrapper around an LGPL/GPL `ffmpeg` binary) or upload a `.wav` file directly.
+
 ## Running the App
 
 ```bash
@@ -78,7 +89,7 @@ A slim **Key** strip directly below **Now playing** lets you transpose chords (`
 ## Guitar Shapes, Follow Mode, Speed, and Loop
 
 - **Guitar chord shapes (`frontend/chordShapes.js`):** Displays standard-tuning (`EADGBe`) open chords and movable E/A-shape barre chords as inline SVG diagrams in the **Now playing** area (toggleable via **Settings → Guitar shapes**). When a capo is active, diagrams show the fret shapes to play with a **Capo N** bar at the top. Rare chords fall back to a simple triad marked `simplified`. Tap the current chord to view its notes and switch between open and barre shapes.
-- **Sticky Now playing & Follow mode:** The **Now playing** strip stays pinned above the chart with the current chord, next chord countdown, beat dots (`1–4`), bar progress, and Play/Pause + seek bar. **Follow mode** (in **Settings → Practice**) swaps the full chart for a 4-bar teleprompter.
+- **Fixed player block & Follow mode:** **Now playing** and the **Key** strip are pinned in one fixed block (under the top bar on desktop, at the bottom on phones) while only the chord chart scrolls in its own container. **Follow mode** (in **Settings → Practice**) swaps the full chart for a 4-bar teleprompter.
 - **Practice controls:** Slow down playback to `0.5x` or `0.75x` (with pitch preservation) and use **Loop 4 bars** in **Settings → Practice** to repeat difficult passages.
 - **Branding:** The header mark and browser tab favicon share `frontend/logo.svg`.
 

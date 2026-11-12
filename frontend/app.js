@@ -21,7 +21,10 @@ const inputOptionsBtn = document.getElementById("input-options-btn");
 const inputOptionsPanel = document.getElementById("input-options-panel");
 const statusBanner = document.getElementById("status-banner");
 
+const topbarEl = document.querySelector(".topbar");
 const resultsView = document.getElementById("results-view");
+const playerDockEl = document.getElementById("player-dock");
+const chartScrollEl = document.getElementById("chart-scroll");
 const audioPlayer = document.getElementById("audio-player");
 const nowPlayingStrip = document.getElementById("now-playing-strip");
 const npCurrentBtn = document.getElementById("np-current-btn");
@@ -328,6 +331,7 @@ function renderAnalysis(data) {
   resultsView.hidden = false;
   exportBtn.disabled = false;
   newSongBtn.hidden = false;
+  syncLayoutHeights();
 
   if (audioPlayer.src !== new URL(data.audio_url, window.location.origin).href) {
     audioPlayer.src = data.audio_url;
@@ -585,13 +589,11 @@ function renderDiagramInto(container, chordName, compact) {
   if (!container) return;
   if (!showGuitarShapes || !window.ChordShapes || !chordName || chordName === "N") {
     container.innerHTML = "";
-    container.hidden = true;
     return;
   }
   const { shape } = getActiveShapeForChord(chordName);
   if (!shape) {
     container.innerHTML = "";
-    container.hidden = true;
     return;
   }
   const activeCapo = showShapesMode ? capoFret : 0;
@@ -599,7 +601,6 @@ function renderDiagramInto(container, chordName, compact) {
     capoFret: activeCapo,
     compact,
   });
-  container.hidden = false;
 }
 
 function openChordPopover(chordName) {
@@ -662,11 +663,34 @@ function renderFollowTeleprompter(currentBarIdx) {
   followTeleprompter.appendChild(row);
 }
 
+function syncLayoutHeights() {
+  if (topbarEl) {
+    document.documentElement.style.setProperty("--topbar-h", `${topbarEl.offsetHeight}px`);
+  }
+  if (playerDockEl && !resultsView.hidden) {
+    document.documentElement.style.setProperty("--dock-h", `${playerDockEl.offsetHeight}px`);
+  }
+}
+
+if (typeof ResizeObserver !== "undefined") {
+  const layoutObserver = new ResizeObserver(syncLayoutHeights);
+  if (topbarEl) layoutObserver.observe(topbarEl);
+  if (playerDockEl) layoutObserver.observe(playerDockEl);
+}
+window.addEventListener("resize", syncLayoutHeights);
+
 function scrollBarIntoView(barEl) {
-  if (!barEl) return;
+  if (!barEl || !chartScrollEl) return;
   const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const containerRect = chartScrollEl.getBoundingClientRect();
+  const barRect = barEl.getBoundingClientRect();
+  const currentScroll = chartScrollEl.scrollTop;
+  const targetTop = Math.max(
+    0,
+    currentScroll + (barRect.top - containerRect.top) - (chartScrollEl.clientHeight / 2) + (barEl.offsetHeight / 2)
+  );
   isProgrammaticScroll = true;
-  barEl.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "center" });
+  chartScrollEl.scrollTo({ top: targetTop, behavior: reduced ? "auto" : "smooth" });
   window.setTimeout(() => {
     isProgrammaticScroll = false;
   }, 400);
@@ -1154,12 +1178,14 @@ jumpToBarBtn.addEventListener("click", () => {
   }
 });
 
-window.addEventListener("scroll", () => {
-  if (!isProgrammaticScroll && !audioPlayer.paused && currentAnalysis && !resultsView.hidden) {
-    autoScrollEnabled = false;
-    jumpToBarBtn.hidden = false;
-  }
-}, { passive: true });
+if (chartScrollEl) {
+  chartScrollEl.addEventListener("scroll", () => {
+    if (!isProgrammaticScroll && !audioPlayer.paused && currentAnalysis && !resultsView.hidden) {
+      autoScrollEnabled = false;
+      jumpToBarBtn.hidden = false;
+    }
+  }, { passive: true });
+}
 
 document.addEventListener("keydown", (event) => {
   if (event.code === "Escape") {
