@@ -142,6 +142,26 @@ def log_startup_toolchain() -> dict[str, str | None]:
     return tc
 
 
+def get_system_status() -> dict[str, Any]:
+    """Return lightweight toolchain status for UI diagnostics and health checks."""
+    tc = resolve_toolchain()
+    yt_ver = None
+    try:
+        import yt_dlp.version
+
+        yt_ver = getattr(yt_dlp.version, "__version__", None)
+    except Exception:
+        pass
+    return {
+        "ffmpeg_ok": bool(tc["ffmpeg"]),
+        "ffmpeg_path": tc["ffmpeg"],
+        "ffprobe_ok": bool(tc["ffprobe"]),
+        "ffprobe_path": tc["ffprobe"],
+        "js_runtime": tc["deno"] or tc["node"],
+        "ytdlp_version": yt_ver,
+    }
+
+
 def friendly_missing_ffmpeg_message() -> str:
     """Plain-language instructions when ffmpeg is not installed."""
     return (
@@ -168,3 +188,4 @@ def friendly_error_message(exc: Exception, context: str = "analysis") -> str:
     if context == "youtube":
         return raw if raw else "Could not download audio from YouTube. Download the audio yourself and use the upload box."
     return f"Could not analyze this audio file ({raw}). Try converting it to WAV or MP3 and uploading again."
+
