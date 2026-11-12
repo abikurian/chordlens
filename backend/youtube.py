@@ -13,6 +13,7 @@ from backend.ffmpeg_utils import (
     friendly_error_message,
     friendly_missing_ffmpeg_message,
 )
+from backend.log_utils import append_to_app_log, safe_json_loads
 
 MAX_YOUTUBE_DURATION_SEC = 12 * 60  # 12 minutes
 ALLOWED_COOKIE_BROWSERS = {"chrome", "edge", "firefox", "brave", "opera", "safari"}
@@ -125,8 +126,8 @@ def _friendly_yt_dlp_error(raw_err: str) -> str:
     if "ffmpeg" in low and ("not found" in low or "missing" in low):
         return "ffmpeg was not found on PATH. Install ffmpeg and restart the server, or upload a WAV/MP3 file."
 
-    last_line = raw_err.strip().splitlines()[-1] if raw_err.strip() else "Download failed"
-    return f"Could not download audio from YouTube ({last_line}). {fallback}"
+    append_to_app_log(f"[YOUTUBE ERROR] raw yt-dlp error output:\n{raw_err.strip()}")
+    return "That link could not be read. Check that it is a normal YouTube video link, or upload the audio file instead."
 
 
 def download_youtube_audio(
@@ -176,8 +177,13 @@ def download_youtube_audio(
         raise RuntimeError(friendly_error_message(exc, context="youtube")) from exc
 
     if info_proc.returncode == 0 and info_proc.stdout.strip():
-        try:
-            meta = json.loads(info_proc.stdout.strip().splitlines()[-1])
+        meta = safe_json_loads(
+            info_proc.stdout,
+            context="youtube.py:download_youtube_audio(info_proc.stdout)",
+            allow_fallback=True,
+            fallback_value=None,
+        )
+        if isinstance(meta, dict):
             if meta.get("title"):
                 title = str(meta["title"]).strip()
             duration = meta.get("duration")
@@ -188,10 +194,6 @@ def download_youtube_audio(
                     f"Video is {mins}m {secs}s long (limit is 12 minutes). "
                     "Download the audio yourself and use the upload box instead."
                 )
-        except ValueError:
-            raise
-        except Exception:
-            pass
     elif info_proc.returncode != 0:
         err = (info_proc.stderr or info_proc.stdout or "").strip()
         if err:
@@ -222,6 +224,7 @@ def download_youtube_audio(
 
     if proc.returncode != 0:
         err = (proc.stderr or proc.stdout or "Unknown yt-dlp error").strip()
+        append_to_app_log(f"[YOUTUBE ERROR] yt-dlp download failed (code {proc.returncode}):\n{err}")
         raise RuntimeError(_friendly_yt_dlp_error(err))
 
     wav_path = output_dir / f"{file_stem}.wav"

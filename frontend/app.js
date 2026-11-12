@@ -20,6 +20,10 @@ const urlBtn = document.getElementById("url-btn");
 const inputOptionsBtn = document.getElementById("input-options-btn");
 const inputOptionsPanel = document.getElementById("input-options-panel");
 const statusBanner = document.getElementById("status-banner");
+const statusTextEl = document.getElementById("status-text");
+const copyDiagnosticsBtn = document.getElementById("copy-diagnostics-btn");
+const dropZone = document.getElementById("drop-zone");
+const dropZoneContent = document.getElementById("drop-zone-content");
 
 const topbarEl = document.querySelector(".topbar");
 const resultsView = document.getElementById("results-view");
@@ -323,15 +327,128 @@ function formatTime(seconds) {
   return `${mins}:${secs.toString().padStart(2, "0")}`;
 }
 
+let lastErrorMessage = "";
+
+function cleanErrorMessage(rawMsg) {
+  if (!rawMsg) return "An unexpected error occurred. Please try again.";
+  const msg = String(rawMsg).trim();
+  const low = msg.toLowerCase();
+
+  // If already clean plain sentence, keep it
+  if (
+    msg.includes("limit is 12 minutes") ||
+    msg.includes("is private") ||
+    msg.includes("is unavailable") ||
+    msg.includes("age-restricted") ||
+    msg.includes("not a bot") ||
+    msg.includes("rate-limited") ||
+    msg.includes("empty or silent") ||
+    msg.includes("ffmpeg")
+  ) {
+    return msg;
+  }
+
+  // Filter out any leaked raw Python errors, json errors, or tracebacks
+  if (
+    low.includes("traceback") ||
+    low.includes("jsondecodeerror") ||
+    low.includes("expecting ',' delimiter") ||
+    low.includes("expecting value") ||
+    low.includes("line 1 column") ||
+    low.includes("char ") ||
+    low.includes("winerror") ||
+    low.includes("filenotfounderror")
+  ) {
+    if (low.includes("youtube") || low.includes("video") || low.includes("yt_dlp") || low.includes("delimiter")) {
+      return "That link could not be read. Check that it is a normal YouTube video link, or upload the audio file instead.";
+    }
+    return "Could not analyze this audio file. Try converting it to WAV or MP3 and uploading again.";
+  }
+
+  return msg;
+}
+
+async function fetchJsonSafe(url, options = {}) {
+  try {
+    const res = await fetch(url, options);
+    const text = await res.text();
+    let data = null;
+    try {
+      data = text ? JSON.parse(text) : {};
+    } catch {
+      // Non-JSON response (e.g. HTML 500 error page or empty response)
+      data = {
+        detail: res.ok
+          ? "Server returned an unexpected response format."
+          : `Server error (${res.status}). Try again or check Options / Settings.`
+      };
+    }
+    return { ok: res.ok, status: res.status, data };
+  } catch (err) {
+    return {
+      ok: false,
+      status: 0,
+      data: { detail: "Could not connect to ChordLens server. Check that the app is running." }
+    };
+  }
+}
+
 function setStatus(message, kind = "info") {
-  statusBanner.textContent = message;
-  statusBanner.className = kind === "error" ? "status-line error" : "status-line";
+  const clean = kind === "error" ? cleanErrorMessage(message) : message;
+  lastErrorMessage = clean;
+  if (statusTextEl) {
+    statusTextEl.textContent = clean;
+  } else {
+    statusBanner.textContent = clean;
+  }
+  statusBanner.className = kind === "error" ? "status-box error" : "status-box info";
   statusBanner.hidden = false;
+  if (copyDiagnosticsBtn) {
+    copyDiagnosticsBtn.hidden = kind !== "error";
+    copyDiagnosticsBtn.textContent = "Copy diagnostics";
+  }
 }
 
 function clearStatus() {
   statusBanner.hidden = true;
-  statusBanner.textContent = "";
+  if (statusTextEl) statusTextEl.textContent = "";
+  if (copyDiagnosticsBtn) copyDiagnosticsBtn.hidden = true;
+  lastErrorMessage = "";
+}
+
+if (copyDiagnosticsBtn) {
+  copyDiagnosticsBtn.addEventListener("click", async () => {
+    let logs = "";
+    let version = "0.1.2";
+    try {
+      const res = await fetchJsonSafe("/api/system/diagnostics");
+      if (res.ok && res.data) {
+        version = res.data.version || version;
+        logs = res.data.logs || "";
+      }
+    } catch {
+      // Offline fallback
+    }
+
+    const report = [
+      `ChordLens v${version} Diagnostics`,
+      `Time: ${new Date().toISOString()}`,
+      `Error: ${lastErrorMessage || "None reported"}`,
+      "",
+      "--- Recent App Logs ---",
+      logs || "No logs available.",
+    ].join("\n");
+
+    try {
+      await navigator.clipboard.writeText(report);
+      copyDiagnosticsBtn.textContent = "Copied!";
+      setTimeout(() => {
+        copyDiagnosticsBtn.textContent = "Copy diagnostics";
+      }, 2500);
+    } catch {
+      copyDiagnosticsBtn.textContent = "Copy failed";
+    }
+  });
 }
 
 function setLoading(isLoading, message = "") {
@@ -1766,11 +1883,74 @@ function getSelectedMode() {
   return checked ? checked.value : "fast";
 }
 
+function updateFileSelectionUI(file) {
+  if (file) {
+    const sizeMb = (file.size / (1024 * 1024)).toFixed(2);
+    selectedFileNameEl.textContent = `Selected: ${file.name} (${sizeMb} MB)`;
+    selectedFileNameEl.hidden = false;
+    if (dropZoneContent) {
+      const promptEl = dropZoneContent.querySelector(".drop-zone-prompt");
+      if (promptEl) promptEl.textContent = "File selected (click or drop to change)";
+    }
+  } else {
+    selectedFileNameEl.textContent = "";
+    selectedFileNameEl.hidden = true;
+    if (dropZoneContent) {
+      const promptEl = dropZoneContent.querySelector(".drop-zone-prompt");
+      if (promptEl) promptEl.textContent = "Choose an audio file or drag & drop here";
+    }
+  }
+}
+
+if (dropZone && audioFileInput) {
+  dropZone.addEventListener("click", (e) => {
+    if (e.target !== audioFileInput) {
+      audioFileInput.click();
+    }
+  });
+
+  dropZone.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      audioFileInput.click();
+    }
+  });
+
+  dropZone.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    dropZone.classList.add("dragover");
+  });
+
+  dropZone.addEventListener("dragleave", (e) => {
+    e.preventDefault();
+    dropZone.classList.remove("dragover");
+  });
+
+  dropZone.addEventListener("drop", (e) => {
+    e.preventDefault();
+    dropZone.classList.remove("dragover");
+    if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const file = e.dataTransfer.files[0];
+      try {
+        const dataTransfer = new DataTransfer();
+        dataTransfer.items.add(file);
+        audioFileInput.files = dataTransfer.files;
+      } catch {
+        // Fallback
+      }
+      updateFileSelectionUI(file);
+    }
+  });
+
+  audioFileInput.addEventListener("change", () => {
+    updateFileSelectionUI(audioFileInput.files[0]);
+  });
+}
+
 async function pollJobUntilDone(jobId) {
   while (true) {
-    const res = await fetch(`/api/jobs/${jobId}`);
-    const job = await res.json();
-    if (!res.ok) {
+    const { ok, data: job } = await fetchJsonSafe(`/api/jobs/${jobId}`);
+    if (!ok) {
       throw new Error(job.detail || "Lost track of analysis job.");
     }
     if (job.status === "done") {
@@ -1820,9 +2000,8 @@ uploadForm.addEventListener("submit", async (event) => {
     const formData = new FormData();
     formData.append("file", file);
     formData.append("mode", mode);
-    const res = await fetch("/api/jobs/analyze", { method: "POST", body: formData });
-    const startData = await res.json();
-    if (!res.ok) {
+    const { ok, data: startData } = await fetchJsonSafe("/api/jobs/analyze", { method: "POST", body: formData });
+    if (!ok) {
       throw new Error(startData.detail || "Could not start analysis.");
     }
     const data = await pollJobUntilDone(startData.job_id);
@@ -1848,13 +2027,12 @@ urlForm.addEventListener("submit", async (event) => {
   setLoading(true, `Analyzing YouTube link (${mode} mode)...`);
 
   try {
-    const res = await fetch("/api/jobs/analyze-url", {
+    const { ok, data: startData } = await fetchJsonSafe("/api/jobs/analyze-url", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ url, mode, cookies_browser: cookiesBrowser }),
     });
-    const startData = await res.json();
-    if (!res.ok) {
+    if (!ok) {
       throw new Error(startData.detail || "Could not start YouTube analysis.");
     }
     const data = await pollJobUntilDone(startData.job_id);
@@ -1875,9 +2053,8 @@ const cacheActionStatusEl = document.getElementById("cache-action-status");
 
 async function loadAppHealthAndDiagnostics() {
   try {
-    const res = await fetch("/api/health");
-    if (!res.ok) return;
-    const data = await res.json();
+    const { ok, data } = await fetchJsonSafe("/api/health");
+    if (!ok || !data) return;
     if (aboutAppVersionEl && data.version) {
       aboutAppVersionEl.textContent = data.version;
     }
@@ -1898,11 +2075,10 @@ async function loadAppHealthAndDiagnostics() {
 if (openDataDirBtn) {
   openDataDirBtn.addEventListener("click", async () => {
     try {
-      const res = await fetch("/api/system/open-data-dir", { method: "POST" });
-      const data = await res.json();
+      const { ok, data } = await fetchJsonSafe("/api/system/open-data-dir", { method: "POST" });
       if (cacheActionStatusEl) {
         cacheActionStatusEl.hidden = false;
-        cacheActionStatusEl.textContent = data.detail || (res.ok ? "Opened folder" : "Could not open folder");
+        cacheActionStatusEl.textContent = data.detail || (ok ? "Opened folder" : "Could not open folder");
       }
     } catch (err) {
       if (cacheActionStatusEl) {
@@ -1916,11 +2092,10 @@ if (openDataDirBtn) {
 if (clearCacheBtn) {
   clearCacheBtn.addEventListener("click", async () => {
     try {
-      const res = await fetch("/api/system/clear-cache", { method: "POST" });
-      const data = await res.json();
+      const { ok, data } = await fetchJsonSafe("/api/system/clear-cache", { method: "POST" });
       if (cacheActionStatusEl) {
         cacheActionStatusEl.hidden = false;
-        cacheActionStatusEl.textContent = data.detail || "Cache cleared";
+        cacheActionStatusEl.textContent = data.detail || (ok ? "Cache cleared" : "Failed to clear cache");
       }
     } catch (err) {
       if (cacheActionStatusEl) {
@@ -1939,10 +2114,9 @@ if (updateYtdlpBtn) {
       cacheActionStatusEl.textContent = "Updating yt-dlp...";
     }
     try {
-      const res = await fetch("/api/system/update-ytdlp", { method: "POST" });
-      const data = await res.json();
+      const { ok, data } = await fetchJsonSafe("/api/system/update-ytdlp", { method: "POST" });
       if (cacheActionStatusEl) {
-        cacheActionStatusEl.textContent = data.detail || (res.ok ? "yt-dlp updated" : "Update failed");
+        cacheActionStatusEl.textContent = data.detail || (ok ? "yt-dlp updated" : "Update failed");
       }
       loadAppHealthAndDiagnostics();
     } catch (err) {

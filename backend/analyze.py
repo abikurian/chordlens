@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from backend.log_utils import safe_json_loads
 import logging
 from pathlib import Path
 from typing import Any
@@ -637,11 +638,19 @@ def analyze_audio(
     mode_tag = f"{clean_mode}_{CACHE_VERSION}" if use_phase2 else "v1"
     cache_path = CACHE_DIR / f"{file_hash}_{mode_tag}.json"
     if use_cache and cache_path.exists():
-        if progress_cb:
-            progress_cb("Loaded cached analysis.")
-        cached = json.loads(cache_path.read_text(encoding="utf-8"))
-        cached["cached"] = True
-        return cached
+        cached = safe_json_loads(
+            cache_path.read_text(encoding="utf-8"),
+            context=f"analyze.py:cache({cache_path.name})",
+            allow_fallback=True,
+            fallback_value=None,
+        )
+        if cached and isinstance(cached, dict):
+            if progress_cb:
+                progress_cb("Loaded cached analysis.")
+            cached["cached"] = True
+            return cached
+        # If cache was corrupted or empty, clean it up so fresh analysis runs
+        cache_path.unlink(missing_ok=True)
 
     if not use_phase2:
         sr = 22050

@@ -172,20 +172,48 @@ def friendly_missing_ffmpeg_message() -> str:
 
 
 def friendly_error_message(exc: Exception, context: str = "analysis") -> str:
-    """Log the full traceback in the terminal and return a plain-language UI message."""
-    traceback.print_exc()
-    raw = str(exc)
+    """Log the full traceback to chordlens.log and return a plain-language UI message."""
+    tb = traceback.format_exc()
+    raw = str(exc).strip()
     low = raw.lower()
+
+    try:
+        from backend.log_utils import append_to_app_log
+        append_to_app_log(f"[{context.upper()} EXCEPTION] {type(exc).__name__}: {raw}\n{tb}")
+    except Exception:
+        pass
+
+    # Helper executable not found
     if isinstance(exc, FileNotFoundError) or "winerror 2" in low or "cannot find the file specified" in low:
         tc = resolve_toolchain()
-        if not tc["ffmpeg"]:
+        if not tc.get("ffmpeg"):
             return friendly_missing_ffmpeg_message()
         return (
             "A required helper program (ffmpeg or yt-dlp) could not be launched. "
-            "Check that ffmpeg is installed (winget install Gyan.FFmpeg), restart your terminal and the app, "
-            "or upload a WAV file."
+            "Check that ffmpeg is installed, restart the app, or upload a WAV file instead."
         )
+
     if context == "youtube":
-        return raw if raw else "Could not download audio from YouTube. Download the audio yourself and use the upload box."
-    return f"Could not analyze this audio file ({raw}). Try converting it to WAV or MP3 and uploading again."
+        if "limit is 12 minutes" in low or "video is " in low:
+            return raw
+        if "private video" in low:
+            return "This YouTube video is private. Make it public, or upload the audio file instead."
+        if "unavailable" in low or "removed by the uploader" in low:
+            return "That YouTube video is unavailable or was removed. Check the link, or upload the audio file instead."
+        if "confirm your age" in low or "age-restricted" in low:
+            return "This video is age-restricted. Enable browser cookies in Options (for personal use), or upload the audio file instead."
+        if "not a bot" in low or "sign in to confirm" in low:
+            return "YouTube asked to confirm you are not a bot. Enable browser cookies in Options (for personal use), or upload the audio file instead."
+        if "429" in low or "too many requests" in low or "403" in low:
+            return "YouTube rate-limited or blocked this request. Wait a few minutes, update yt-dlp in Options, or upload the audio file instead."
+        return "That link could not be read. Check that it is a normal YouTube video link, or upload the audio file instead."
+
+    # Audio file analysis errors
+    if "empty or silent" in low:
+        return "The audio file appears to be empty or silent. Check the file in another media player and try uploading again."
+    if "memory" in low or "out of memory" in low:
+        return "The system ran out of memory during analysis. Try using Fast mode or a shorter audio file."
+    if "unsupported file type" in low:
+        return raw
+    return "Could not analyze this audio file. Try converting it to WAV or MP3 and uploading again."
 

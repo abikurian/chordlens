@@ -11,12 +11,13 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from backend.analyze import analyze_audio
-from backend.ffmpeg_utils import friendly_error_message, get_system_status, log_startup_toolchain
+from backend.ffmpeg_utils import friendly_error_message, get_system_status
+from backend.log_utils import append_to_app_log, get_recent_logs, safe_json_loads, log_startup_toolchain
 from backend.paths import (
     CACHE_DIR,
     CACHE_YT_DIR,
@@ -81,11 +82,16 @@ def _get_or_download_youtube(
     cached_audio = _find_audio_file(audio_id)
 
     if cached_audio is not None and meta_path.exists():
-        try:
-            meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        meta = safe_json_loads(
+            meta_path.read_text(encoding="utf-8"),
+            context=f"main.py:meta_path({meta_path.name})",
+            allow_fallback=True,
+            fallback_value=None,
+        )
+        if meta and isinstance(meta, dict):
             return audio_id, cached_audio, str(meta.get("title") or "YouTube Audio")
-        except Exception:
-            pass
+        # Corrupted meta cache
+        meta_path.unlink(missing_ok=True)
 
     audio_path, title = download_youtube_audio(
         clean_url,
@@ -154,6 +160,34 @@ def update_ytdlp_endpoint() -> dict[str, Any]:
         return {"status": "error", "detail": proc.stderr or proc.stdout or "Update failed"}
     except Exception as exc:
         return {"status": "error", "detail": str(exc)}
+
+
+@app.get("/api/system/diagnostics")
+def system_diagnostics_endpoint() -> dict[str, Any]:
+    return {
+        "version": get_version(),
+        "logs": get_recent_logs(50),
+    }
+
+
+@app.exception_handler(json.JSONDecodeError)
+async def json_decode_exception_handler(request: Request, exc: json.JSONDecodeError):
+    append_to_app_log(f"[FASTAPI JSON ERROR] {request.method} {request.url.path}: {exc}")
+    return JSONResponse(
+        status_code=400,
+        content={"detail": "The request contained invalid data. Please check and try again."},
+    )
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    import traceback
+    tb = traceback.format_exc()
+    append_to_app_log(f"[FASTAPI UNHANDLED] {request.method} {request.url.path}: {exc}\n{tb}")
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "An unexpected error occurred. Use 'Copy diagnostics' for details or restart the app."},
+    )
 
 
 @app.post("/api/analyze")

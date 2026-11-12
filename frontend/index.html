@@ -45,21 +45,31 @@
       <div class="input-grid">
         <form id="upload-form" class="input-block">
           <label for="audio-file" class="field-label">Audio file</label>
-          <div class="input-row">
-            <input type="file" id="audio-file" name="file" accept="audio/*,.mp3,.wav,.flac,.m4a,.ogg" class="file-input" required />
-            <button type="submit" id="upload-btn" class="btn btn-primary">Analyze</button>
+          <div id="drop-zone" class="drop-zone" tabindex="0" role="button" aria-describedby="drop-zone-help">
+            <input type="file" id="audio-file" name="file" accept="audio/*,.mp3,.wav,.flac,.m4a,.ogg" class="file-input-hidden" required />
+            <div id="drop-zone-content" class="drop-zone-content">
+              <svg class="drop-zone-icon" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              <span class="drop-zone-prompt">Choose an audio file or drag &amp; drop here</span>
+              <span id="drop-zone-help" class="drop-zone-help">MP3, WAV, FLAC, M4A, or OGG</span>
+            </div>
+            <p id="selected-file-name" class="selected-file-name" hidden></p>
           </div>
-          <p id="selected-file-name" class="selected-file-name" hidden></p>
+          <div class="input-action-row">
+            <button type="submit" id="upload-btn" class="btn btn-primary">Analyze file</button>
+          </div>
         </form>
 
         <form id="url-form" class="input-block">
           <label for="youtube-url" class="field-label">YouTube link</label>
-          <div class="input-row">
-            <input type="url" id="youtube-url" name="url" inputmode="url" autocapitalize="off" autocomplete="off" spellcheck="false" placeholder="https://www.youtube.com/watch?v=..." class="text-input" required />
-            <div class="url-actions">
+          <div class="url-input-card">
+            <div class="url-input-row">
+              <input type="url" id="youtube-url" name="url" inputmode="url" autocapitalize="off" autocomplete="off" spellcheck="false" placeholder="https://www.youtube.com/watch?v=..." class="text-input" required />
               <button type="button" id="paste-url-btn" class="btn btn-secondary">Paste</button>
-              <button type="submit" id="url-btn" class="btn btn-primary">Analyze</button>
             </div>
+            <p class="url-hint">Works with youtu.be, standard links, and shorts</p>
+          </div>
+          <div class="input-action-row">
+            <button type="submit" id="url-btn" class="btn btn-primary">Analyze link</button>
           </div>
         </form>
       </div>
@@ -93,7 +103,12 @@
         </div>
       </div>
 
-      <p id="status-banner" class="status-line" role="status" aria-live="polite" hidden></p>
+      <div id="status-banner" class="status-box" role="status" aria-live="polite" hidden>
+        <div class="status-content">
+          <span id="status-text" class="status-text"></span>
+          <button type="button" id="copy-diagnostics-btn" class="btn btn-secondary btn-sm copy-diagnostics-btn" hidden>Copy diagnostics</button>
+        </div>
+      </div>
     </section>
 
     <section id="results-view" class="results-view" aria-label="Chord chart" hidden>
