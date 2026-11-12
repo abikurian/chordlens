@@ -30,7 +30,7 @@ ChordLens analyses an audio file (MP3, WAV, M4A, FLAC) or a YouTube link and gen
 
    pip install -r requirements.txt
    ```
-3. **Optional manual `beat_this` checkpoint:** On first run, ChordLens downloads `final0.ckpt` (~77 MB) with resume support to `models/beat_this/final0.ckpt`. If your network blocks the download, download it manually from `https://cloud.cp.jku.at/public.php/dav/files/7ik4RrBKTS273gp/final0.ckpt` and place it at `models/beat_this/final0.ckpt`.
+3. **`beat_this` checkpoint:** Place `final0.ckpt` in `models/beat_this/final0.ckpt` (download manually from `https://cloud.cp.jku.at/index.php/s/7ik4RrBKTS273gp` if not already present; ChordLens will not auto-download it).
 
 ## Running the App
 
@@ -39,6 +39,16 @@ ChordLens analyses an audio file (MP3, WAV, M4A, FLAC) or a YouTube link and gen
 ```
 
 Open `http://127.0.0.1:8000` in your browser.
+
+## Transpose and Capo
+
+The **Play along** panel lets you transpose chords (`-11` to `+11` semitones) and pick a guitar capo (`0` to `12` frets) without altering the audio playback pitch:
+
+- **Maths:** `sounding chord = original chord + transpose`, and `shape to play = sounding chord - capo`.
+  - Example: a `C` chord transposed `+2` semitones sounds as `D`.
+  - Example: a `G` shape played with **Capo 3** sounds as `Bb` (`G + 3 semitones = Bb`; conversely, a song sounding in `Bb` uses `G` shapes with Capo 3).
+- **Key-aware spelling:** Sharp keys spell accidentals with sharps (`F#`, `C#`), flat keys spell them with flats (`Bb`, `Eb`), and minor keys follow their relative major — avoiding awkward spellings like `E#` or `Cb`.
+- **Suggest capo:** Scans frets `0–7` to find the capo position with the highest share of open guitar chords (`C`, `G`, `D`, `A`, `E`, `Am`, `Em`, `Dm`) and lets you apply it with one click.
 
 ## Honest Reporting on Accuracy & Confidence
 
