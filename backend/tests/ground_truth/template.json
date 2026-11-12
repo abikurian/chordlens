@@ -1,0 +1,13 @@
+{
+  "title": "Example Song Title",
+  "audio_file": "relative/or/local/path/to/song.m4a",
+  "tempo": 120.0,
+  "key": "C major",
+  "time_signature": "4/4",
+  "bars": [
+    { "bar": 1, "chord": "C" },
+    { "bar": 2, "chord": "G" },
+    { "bar": 3, "chord": "Am" },
+    { "bar": 4, "chord": "F" }
+  ]
+}
