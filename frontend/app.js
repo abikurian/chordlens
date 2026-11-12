@@ -6,6 +6,24 @@ const uploadBtn = document.getElementById("upload-btn");
 const urlBtn = document.getElementById("url-btn");
 const statusBanner = document.getElementById("status-banner");
 
+window.addEventListener("error", (event) => {
+  console.error("ChordLens UI error:", event.error || event.message);
+  if (statusBanner) {
+    statusBanner.textContent = `UI error: ${event.message || "Unexpected error. Reload the page."}`;
+    statusBanner.className = "status-banner is-error";
+    statusBanner.hidden = false;
+  }
+});
+
+window.addEventListener("unhandledrejection", (event) => {
+  console.error("ChordLens unhandled promise error:", event.reason);
+  if (statusBanner) {
+    statusBanner.textContent = `UI error: ${(event.reason && event.reason.message) || event.reason || "Unexpected error."}`;
+    statusBanner.className = "status-banner is-error";
+    statusBanner.hidden = false;
+  }
+});
+
 const playerPanel = document.getElementById("player-panel");
 const trackTitleEl = document.getElementById("track-title");
 const pipelineBadgeEl = document.getElementById("pipeline-badge");
@@ -512,8 +530,23 @@ exportJsonBtn.addEventListener("click", () => {
   downloadTextFile(`${slug}-chords.json`, JSON.stringify(payload, null, 2), "application/json");
 });
 
+function setPlayAlongEnabled(enabled) {
+  transposeDownBtn.disabled = !enabled;
+  transposeUpBtn.disabled = !enabled;
+  transposeResetBtn.disabled = !enabled;
+  capoSelect.disabled = !enabled;
+  suggestCapoBtn.disabled = !enabled;
+  viewShapesBtn.disabled = !enabled;
+}
+
 function updatePlayAlongUI() {
-  const origKey = currentAnalysis ? currentAnalysis.key : "Unknown";
+  if (!currentAnalysis) {
+    setPlayAlongEnabled(false);
+    playAlongSummaryEl.textContent = "Analyze a song to use transpose and capo.";
+    return;
+  }
+  setPlayAlongEnabled(true);
+  const origKey = currentAnalysis.key || "Unknown";
   const soundingKey = transposeKey(origKey, transposeSemitones);
   transposeValEl.textContent = transposeSemitones > 0 ? `+${transposeSemitones}` : String(transposeSemitones);
   resultingKeyEl.textContent = `Key: ${soundingKey}`;

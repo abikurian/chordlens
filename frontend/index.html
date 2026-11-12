@@ -12,7 +12,7 @@
     href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap"
     rel="stylesheet"
   />
-  <link rel="stylesheet" href="/styles.css" />
+  <link rel="stylesheet" href="/styles.css?v=20261112b" />
 </head>
 <body>
   <header class="topbar">
@@ -163,20 +163,20 @@
         </div>
       </div>
 
-      <div id="play-along-panel" class="play-along-panel" hidden>
+      <div id="play-along-panel" class="play-along-panel">
         <div class="play-along-row">
           <div class="play-along-group" role="group" aria-label="Transpose">
             <span class="play-along-label">Transpose</span>
-            <button type="button" id="transpose-down-btn" class="btn btn-secondary btn-sm btn-icon" aria-label="Transpose down one semitone">-</button>
+            <button type="button" id="transpose-down-btn" class="btn btn-secondary btn-sm btn-icon" aria-label="Transpose down one semitone" disabled>-</button>
             <span id="transpose-val" class="play-along-value">0</span>
-            <button type="button" id="transpose-up-btn" class="btn btn-secondary btn-sm btn-icon" aria-label="Transpose up one semitone">+</button>
-            <button type="button" id="transpose-reset-btn" class="btn btn-secondary btn-sm">Reset</button>
+            <button type="button" id="transpose-up-btn" class="btn btn-secondary btn-sm btn-icon" aria-label="Transpose up one semitone" disabled>+</button>
+            <button type="button" id="transpose-reset-btn" class="btn btn-secondary btn-sm" disabled>Reset</button>
             <span id="resulting-key" class="play-along-key">Key: —</span>
           </div>
 
           <div class="play-along-group">
             <label for="capo-select" class="play-along-label">Capo</label>
-            <select id="capo-select" class="capo-select">
+            <select id="capo-select" class="capo-select" disabled>
               <option value="0">No capo</option>
               <option value="1">1</option>
               <option value="2">2</option>
@@ -191,8 +191,8 @@
               <option value="11">11</option>
               <option value="12">12</option>
             </select>
-            <button type="button" id="suggest-capo-btn" class="btn btn-secondary btn-sm">Suggest capo</button>
-            <button type="button" id="view-shapes-btn" class="btn btn-secondary btn-sm" aria-pressed="true">Show: Shapes to play</button>
+            <button type="button" id="suggest-capo-btn" class="btn btn-secondary btn-sm" disabled>Suggest capo</button>
+            <button type="button" id="view-shapes-btn" class="btn btn-secondary btn-sm" aria-pressed="true" disabled>Show: Shapes to play</button>
           </div>
         </div>
 
@@ -201,7 +201,7 @@
           <button type="button" id="apply-capo-btn" class="btn btn-primary btn-sm">Apply</button>
         </div>
 
-        <p id="play-along-summary" class="play-along-note"></p>
+        <p id="play-along-summary" class="play-along-note">Analyze a song to use transpose and capo.</p>
         <p class="play-along-note">Transpose and capo change only the displayed chord names. The audio stays in the original key.</p>
       </div>
 
@@ -232,7 +232,12 @@
     </section>
   </main>
 
-  <script src="/app.js"></script>
+  <footer class="site-footer">
+    <span>ChordLens</span>
+    <span>Build 2026-11-12</span>
+  </footer>
+
+  <script src="/app.js?v=20261112b"></script>
 </body>
 </html>
 
