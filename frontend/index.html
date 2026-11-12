@@ -12,7 +12,7 @@
     href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap"
     rel="stylesheet"
   />
-  <link rel="stylesheet" href="/styles.css?v=20261112b" />
+  <link rel="stylesheet" href="/styles.css?v=20261112d" />
 </head>
 <body>
   <header class="topbar">
@@ -147,6 +147,9 @@
             <button type="button" id="guitar-shapes-btn" class="btn btn-secondary btn-sm" aria-pressed="true">
               Show guitar shapes
             </button>
+            <button type="button" id="follow-mode-btn" class="btn btn-secondary btn-sm" aria-pressed="false">
+              Follow mode
+            </button>
             <button type="button" id="chord-detail-btn" class="btn btn-secondary btn-sm" aria-pressed="false">
               Chords: Simple
             </button>
@@ -209,19 +212,79 @@
       </div>
 
       <div id="now-playing-strip" class="now-playing-strip" hidden>
-        <div class="now-playing-current">
-          <span class="now-playing-label">Now playing</span>
-          <strong id="now-playing-chord" class="now-playing-chord">—</strong>
+        <div class="np-top-row">
+          <button type="button" id="np-current-btn" class="np-chord-btn" aria-haspopup="dialog" title="Tap for alternate shapes and notes">
+            <div class="np-chord-text">
+              <span class="now-playing-label">Now playing</span>
+              <strong id="now-playing-chord" class="now-playing-chord">—</strong>
+              <span id="np-simplified-tag" class="np-simplified-tag" hidden>simplified shape</span>
+            </div>
+            <div id="np-current-diagram" class="np-diagram"></div>
+          </button>
+
+          <button type="button" id="np-next-btn" class="np-next-btn" title="Tap to jump to next chord">
+            <div class="np-chord-text">
+              <span class="now-playing-label">Next</span>
+              <strong id="now-playing-next-chord" class="now-playing-next-chord">—</strong>
+              <span id="now-playing-countdown" class="now-playing-countdown"></span>
+            </div>
+            <div id="np-next-diagram" class="np-diagram np-diagram-sm"></div>
+          </button>
+
+          <div class="np-upcoming-wrap">
+            <span class="now-playing-label">Then</span>
+            <div id="np-upcoming" class="np-upcoming">—</div>
+          </div>
         </div>
-        <div class="now-playing-next">
-          <span class="now-playing-label">Next</span>
-          <strong id="now-playing-next-chord" class="now-playing-next-chord">—</strong>
-          <span id="now-playing-countdown" class="now-playing-countdown"></span>
+
+        <div class="np-beat-row">
+          <div id="np-beat-dots" class="np-beat-dots" aria-label="Beat in bar">
+            <span class="beat-dot" data-beat="0">1</span>
+            <span class="beat-dot" data-beat="1">2</span>
+            <span class="beat-dot" data-beat="2">3</span>
+            <span class="beat-dot" data-beat="3">4</span>
+          </div>
+          <div class="np-bar-progress-track" aria-hidden="true">
+            <div id="np-bar-progress" class="np-bar-progress-fill"></div>
+          </div>
+          <span id="np-time-readout" class="np-time-readout">0:00 / 0:00</span>
         </div>
-        <button type="button" id="jump-to-bar-btn" class="btn btn-secondary btn-sm" hidden>
-          Jump to current bar
-        </button>
+
+        <div class="np-controls-row">
+          <div class="np-transport">
+            <button type="button" id="np-prev-bar-btn" class="btn btn-secondary btn-sm" aria-label="Previous bar">Prev bar</button>
+            <button type="button" id="np-play-btn" class="btn btn-primary btn-sm">Play</button>
+            <button type="button" id="np-next-bar-btn" class="btn btn-secondary btn-sm" aria-label="Next bar">Next bar</button>
+          </div>
+
+          <input type="range" id="np-seek-slider" class="np-seek-slider" min="0" max="1000" value="0" aria-label="Seek audio position" />
+
+          <div class="np-practice">
+            <div class="np-speed-group" role="group" aria-label="Playback speed">
+              <button type="button" class="btn btn-secondary btn-sm speed-btn" data-speed="0.5" aria-pressed="false">0.5x</button>
+              <button type="button" class="btn btn-secondary btn-sm speed-btn" data-speed="0.75" aria-pressed="false">0.75x</button>
+              <button type="button" class="btn btn-secondary btn-sm speed-btn" data-speed="1" aria-pressed="true">1x</button>
+            </div>
+            <button type="button" id="np-loop-btn" class="btn btn-secondary btn-sm" aria-pressed="false">Loop 4 bars</button>
+            <button type="button" id="jump-to-bar-btn" class="btn btn-secondary btn-sm" hidden>
+              Jump to current bar
+            </button>
+          </div>
+        </div>
       </div>
+
+      <div id="chord-popover" class="chord-popover" role="dialog" aria-modal="false" aria-labelledby="popover-title" hidden>
+        <div class="popover-head">
+          <div>
+            <h3 id="popover-title" class="popover-title">—</h3>
+            <p id="popover-notes" class="popover-notes"></p>
+          </div>
+          <button type="button" id="popover-close-btn" class="btn btn-secondary btn-sm">Close</button>
+        </div>
+        <div id="popover-shapes" class="popover-shapes"></div>
+      </div>
+
+      <div id="follow-teleprompter" class="follow-teleprompter" aria-label="Follow mode teleprompter" hidden></div>
 
       <div id="chart-empty" class="chart-empty">
         <p class="empty-heading">Ready for a song</p>
@@ -240,8 +303,8 @@
     <span>Build 2026-11-12</span>
   </footer>
 
-  <script src="/chordShapes.js?v=20261112c"></script>
-  <script src="/app.js?v=20261112c"></script>
+  <script src="/chordShapes.js?v=20261112d"></script>
+  <script src="/app.js?v=20261112d"></script>
 </body>
 </html>
 

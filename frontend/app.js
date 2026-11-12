@@ -39,6 +39,8 @@ const chartEmpty = document.getElementById("chart-empty");
 const sectionStripEl = document.getElementById("section-strip");
 const leadSheetEl = document.getElementById("lead-sheet");
 const chartToolbar = document.getElementById("chart-toolbar");
+const guitarShapesBtn = document.getElementById("guitar-shapes-btn");
+const followModeBtn = document.getElementById("follow-mode-btn");
 const chordDetailBtn = document.getElementById("chord-detail-btn");
 const moreDetailBtn = document.getElementById("more-detail-btn");
 const editModeBtn = document.getElementById("edit-mode-btn");
@@ -46,10 +48,32 @@ const exportJsonBtn = document.getElementById("export-json-btn");
 const exportTxtBtn = document.getElementById("export-txt-btn");
 
 const nowPlayingStrip = document.getElementById("now-playing-strip");
+const npCurrentBtn = document.getElementById("np-current-btn");
 const nowPlayingChordEl = document.getElementById("now-playing-chord");
+const npSimplifiedTag = document.getElementById("np-simplified-tag");
+const npCurrentDiagram = document.getElementById("np-current-diagram");
+const npNextBtn = document.getElementById("np-next-btn");
 const nowPlayingNextChordEl = document.getElementById("now-playing-next-chord");
 const nowPlayingCountdownEl = document.getElementById("now-playing-countdown");
+const npNextDiagram = document.getElementById("np-next-diagram");
+const npUpcomingEl = document.getElementById("np-upcoming");
+const npBeatDots = Array.from(document.querySelectorAll("#np-beat-dots .beat-dot"));
+const npBarProgress = document.getElementById("np-bar-progress");
+const npTimeReadout = document.getElementById("np-time-readout");
+const npPrevBarBtn = document.getElementById("np-prev-bar-btn");
+const npPlayBtn = document.getElementById("np-play-btn");
+const npNextBarBtn = document.getElementById("np-next-bar-btn");
+const npSeekSlider = document.getElementById("np-seek-slider");
+const speedBtns = Array.from(document.querySelectorAll(".speed-btn"));
+const npLoopBtn = document.getElementById("np-loop-btn");
 const jumpToBarBtn = document.getElementById("jump-to-bar-btn");
+
+const chordPopover = document.getElementById("chord-popover");
+const popoverTitle = document.getElementById("popover-title");
+const popoverNotes = document.getElementById("popover-notes");
+const popoverShapes = document.getElementById("popover-shapes");
+const popoverCloseBtn = document.getElementById("popover-close-btn");
+const followTeleprompter = document.getElementById("follow-teleprompter");
 
 const playAlongPanel = document.getElementById("play-along-panel");
 const transposeDownBtn = document.getElementById("transpose-down-btn");
@@ -80,6 +104,14 @@ let transposeSemitones = 0; // -11 .. +11
 let capoFret = 0; // 0 .. 12
 let showShapesMode = true; // true = shapes to play, false = sounding chords
 let suggestedCapoFret = null;
+let showGuitarShapes = true;
+let followMode = false;
+let preferredShapeIndex = {}; // chordName -> index in alternatives
+let loopRange = null; // { start, end, label } | null
+let nextChordJumpTime = null;
+let lastDisplayedCurrentChord = null;
+let lastDisplayedNextChord = null;
+let isSeekingSlider = false;
 
 // Key-aware spelling tables (never produce E#, B#, Fb, or Cb)
 const NOTE_TO_PC = {
@@ -230,10 +262,13 @@ function renderAnalysis(data) {
   chartToolbar.hidden = false;
   playAlongPanel.hidden = beatChords.length === 0;
   nowPlayingStrip.hidden = beatChords.length === 0;
-  leadSheetEl.hidden = false;
-  leadSheetEl.innerHTML = "";
+  leadSheetEl.hidden = followMode;
+  followTeleprompter.hidden = !followMode;
   lastActiveBarIdx = -1;
+  lastDisplayedCurrentChord = null;
+  lastDisplayedNextChord = null;
   updatePlayAlongUI();
+  renderFollowTeleprompter(0);
 
   beatNodes = [];
   barNodes = [];
@@ -684,19 +719,230 @@ window.addEventListener("scroll", () => {
   }
 }, { passive: true });
 
+function getActiveShapeForChord(chordName) {
+  if (!window.ChordShapes || !chordName || chordName === "N") {
+    return { shape: null, alternatives: [], simplified: false, notes: [] };
+  }
+  const opts = window.ChordShapes.getChordShapeOptions(chordName);
+  const idx = preferredShapeIndex[chordName] || 0;
+  const shape = opts.alternatives[idx] || opts.primary;
+  return { shape, alternatives: opts.alternatives, simplified: opts.simplified, notes: opts.notes };
+}
+
+function renderDiagramInto(container, chordName, compact) {
+  if (!container) return;
+  if (!showGuitarShapes || !window.ChordShapes || !chordName || chordName === "N") {
+    container.innerHTML = "";
+    container.hidden = true;
+    return;
+  }
+  const { shape } = getActiveShapeForChord(chordName);
+  if (!shape) {
+    container.innerHTML = "";
+    container.hidden = true;
+    return;
+  }
+  const activeCapo = showShapesMode ? capoFret : 0;
+  container.innerHTML = window.ChordShapes.renderChordDiagramSvg(chordName, shape, {
+    capoFret: activeCapo,
+    compact,
+  });
+  container.hidden = false;
+}
+
+function openChordPopover(chordName) {
+  if (!chordName || chordName === "N" || !window.ChordShapes) return;
+  const { alternatives, simplified, notes } = getActiveShapeForChord(chordName);
+  popoverTitle.textContent = simplified ? `${chordName} (simplified shape)` : chordName;
+  popoverNotes.textContent = notes.length ? `Notes: ${notes.join(" · ")}` : "";
+  popoverShapes.innerHTML = "";
+
+  const currentIdx = preferredShapeIndex[chordName] || 0;
+  const activeCapo = showShapesMode ? capoFret : 0;
+
+  alternatives.forEach((shape, idx) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "popover-shape-btn";
+    btn.setAttribute("aria-pressed", String(idx === currentIdx));
+    btn.innerHTML = `
+      ${window.ChordShapes.renderChordDiagramSvg(chordName, shape, { capoFret: activeCapo, compact: true })}
+      <span>${shape.label || `Shape ${idx + 1}`}</span>
+    `;
+    btn.addEventListener("click", () => {
+      preferredShapeIndex[chordName] = idx;
+      lastDisplayedCurrentChord = null;
+      lastDisplayedNextChord = null;
+      updatePlayhead();
+      openChordPopover(chordName);
+    });
+    popoverShapes.appendChild(btn);
+  });
+
+  chordPopover.hidden = false;
+}
+
+function renderFollowTeleprompter(currentBarIdx) {
+  if (!followMode || !currentAnalysis || !currentAnalysis.beat_chords) return;
+  const beats = currentAnalysis.beat_chords;
+  const totalBars = Math.ceil(beats.length / 4);
+  followTeleprompter.innerHTML = "";
+
+  for (let offset = 0; offset < 4; offset += 1) {
+    const bIdx = currentBarIdx + offset;
+    if (bIdx >= totalBars) break;
+    const barBeats = beats.slice(bIdx * 4, bIdx * 4 + 4);
+    const tokens = barBeats.map((item, idx) => {
+      const prev = item.beat_index > 0 ? beats[item.beat_index - 1] : null;
+      const shown = getDisplayedChord(item.chord);
+      const prevShown = prev ? getDisplayedChord(prev.chord) : null;
+      return prevShown && prevShown === shown && idx > 0 ? "/" : shown;
+    });
+
+    const card = document.createElement("div");
+    card.className = `tele-bar ${offset === 0 ? "is-current" : ""}`;
+    card.innerHTML = `
+      <div class="tele-bar-num">Bar ${bIdx + 1}</div>
+      <div class="tele-bar-chords">${tokens.join(" · ")}</div>
+    `;
+    followTeleprompter.appendChild(card);
+  }
+}
+
+function jumpByBars(delta) {
+  if (!currentAnalysis || !currentAnalysis.beat_chords || !currentAnalysis.beat_chords.length) return;
+  const totalBars = Math.ceil(currentAnalysis.beat_chords.length / 4);
+  const curBar = lastActiveBarIdx < 0 ? 0 : lastActiveBarIdx;
+  const targetBar = Math.max(0, Math.min(totalBars - 1, curBar + delta));
+  const targetBeat = currentAnalysis.beat_chords[targetBar * 4];
+  if (targetBeat) {
+    audioPlayer.currentTime = targetBeat.start;
+    updatePlayhead();
+    if (!followMode && barNodes[targetBar]) {
+      scrollBarIntoView(barNodes[targetBar]);
+    }
+  }
+}
+
+guitarShapesBtn.addEventListener("click", () => {
+  showGuitarShapes = !showGuitarShapes;
+  guitarShapesBtn.setAttribute("aria-pressed", String(showGuitarShapes));
+  lastDisplayedCurrentChord = null;
+  lastDisplayedNextChord = null;
+  updatePlayhead();
+});
+
+followModeBtn.addEventListener("click", () => {
+  followMode = !followMode;
+  followModeBtn.setAttribute("aria-pressed", String(followMode));
+  leadSheetEl.hidden = followMode;
+  followTeleprompter.hidden = !followMode;
+  renderFollowTeleprompter(lastActiveBarIdx < 0 ? 0 : lastActiveBarIdx);
+});
+
+npCurrentBtn.addEventListener("click", () => {
+  if (lastDisplayedCurrentChord) {
+    openChordPopover(lastDisplayedCurrentChord);
+  }
+});
+
+npNextBtn.addEventListener("click", () => {
+  if (nextChordJumpTime !== null) {
+    audioPlayer.currentTime = nextChordJumpTime;
+    if (audioPlayer.paused) audioPlayer.play().catch(() => {});
+    updatePlayhead();
+  }
+});
+
+popoverCloseBtn.addEventListener("click", () => {
+  chordPopover.hidden = true;
+});
+
+npPrevBarBtn.addEventListener("click", () => jumpByBars(-1));
+npNextBarBtn.addEventListener("click", () => jumpByBars(1));
+npPlayBtn.addEventListener("click", () => {
+  if (audioPlayer.paused) {
+    audioPlayer.play().catch(() => {});
+  } else {
+    audioPlayer.pause();
+  }
+});
+
+npSeekSlider.addEventListener("input", () => {
+  isSeekingSlider = true;
+  if (audioPlayer.duration && !Number.isNaN(audioPlayer.duration)) {
+    audioPlayer.currentTime = (Number(npSeekSlider.value) / 1000) * audioPlayer.duration;
+    updatePlayhead();
+  }
+});
+npSeekSlider.addEventListener("change", () => {
+  isSeekingSlider = false;
+});
+
+speedBtns.forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const rate = Number(btn.dataset.speed) || 1;
+    audioPlayer.playbackRate = rate;
+    audioPlayer.preservesPitch = true;
+    speedBtns.forEach((b) => b.setAttribute("aria-pressed", String(b === btn)));
+  });
+});
+
+npLoopBtn.addEventListener("click", () => {
+  if (loopRange) {
+    loopRange = null;
+    npLoopBtn.setAttribute("aria-pressed", "false");
+    npLoopBtn.textContent = "Loop 4 bars";
+    return;
+  }
+  if (!currentAnalysis || !currentAnalysis.beat_chords || !currentAnalysis.beat_chords.length) return;
+  const beats = currentAnalysis.beat_chords;
+  const curBar = lastActiveBarIdx < 0 ? 0 : lastActiveBarIdx;
+  const t = audioPlayer.currentTime;
+  const sections = currentAnalysis.sections || [];
+  const activeSec = sections.find((s) => t >= s.start && t < s.end);
+
+  if (activeSec && sections.length > 1) {
+    loopRange = { start: activeSec.start, end: activeSec.end, label: `${activeSec.label}` };
+    npLoopBtn.textContent = `Loop off (${activeSec.label})`;
+  } else {
+    const startBar = Math.floor(curBar / 4) * 4;
+    const startBeatIdx = startBar * 4;
+    const endBeatIdx = Math.min(beats.length - 1, startBeatIdx + 15);
+    loopRange = {
+      start: beats[startBeatIdx].start,
+      end: beats[endBeatIdx].end,
+      label: `Bars ${startBar + 1}–${Math.min(Math.ceil(beats.length / 4), startBar + 4)}`,
+    };
+    npLoopBtn.textContent = `Loop off (${loopRange.label})`;
+  }
+  npLoopBtn.setAttribute("aria-pressed", "true");
+});
+
 function updatePlayhead() {
   if (!currentAnalysis || !currentAnalysis.beat_chords) return;
   const t = audioPlayer.currentTime;
-  const beats = currentAnalysis.beat_chords;
+  if (loopRange && !audioPlayer.paused && t >= loopRange.end) {
+    audioPlayer.currentTime = loopRange.start;
+  }
 
+  const curT = audioPlayer.currentTime;
+  const dur = audioPlayer.duration || currentAnalysis.duration || 0;
+  npTimeReadout.textContent = `${formatTime(curT)} / ${formatTime(dur)}`;
+  npPlayBtn.textContent = audioPlayer.paused ? "Play" : "Pause";
+  if (!isSeekingSlider && dur > 0) {
+    npSeekSlider.value = String(Math.round((curT / dur) * 1000));
+  }
+
+  const beats = currentAnalysis.beat_chords;
   let activeBeatIdx = -1;
   for (let i = 0; i < beats.length; i += 1) {
-    if (t >= beats[i].start && t < beats[i].end) {
+    if (curT >= beats[i].start && curT < beats[i].end) {
       activeBeatIdx = i;
       break;
     }
   }
-  if (activeBeatIdx === -1 && beats.length > 0 && t >= beats[beats.length - 1].start) {
+  if (activeBeatIdx === -1 && beats.length > 0 && curT >= beats[beats.length - 1].start) {
     activeBeatIdx = beats.length - 1;
   }
 
@@ -719,47 +965,96 @@ function updatePlayhead() {
       if (barNodes[bIdx]) barNodes[bIdx].classList.add("is-played");
     }
 
-    // Update "Now playing" strip
+    // Beat dots (1..4) and bar progress
+    const beatInBar = activeBeatIdx % 4;
+    npBeatDots.forEach((dot, idx) => dot.classList.toggle("is-active", idx === beatInBar));
+    const barStartBeat = beats[barIdx * 4];
+    const barEndBeat = beats[Math.min(beats.length - 1, barIdx * 4 + 3)];
+    const barStart = barStartBeat ? barStartBeat.start : 0;
+    const barEnd = barEndBeat ? barEndBeat.end : curT + 1;
+    const pct = Math.max(0, Math.min(100, ((curT - barStart) / Math.max(0.1, barEnd - barStart)) * 100));
+    npBarProgress.style.width = `${pct.toFixed(1)}%`;
+
+    // Update "Now playing" strip + guitar diagrams
     const curShown = getDisplayedChord(beat.chord);
     nowPlayingChordEl.textContent = curShown;
+    if (curShown !== lastDisplayedCurrentChord) {
+      lastDisplayedCurrentChord = curShown;
+      const shapeInfo = getActiveShapeForChord(curShown);
+      npSimplifiedTag.hidden = !shapeInfo.simplified;
+      renderDiagramInto(npCurrentDiagram, curShown, false);
+    }
 
     let nextChord = null;
     let beatsUntil = 0;
+    nextChordJumpTime = null;
+    const upcoming = [];
+    let lastPushed = curShown;
+
     for (let j = activeBeatIdx + 1; j < beats.length; j += 1) {
       const cand = getDisplayedChord(beats[j].chord);
-      if (cand !== curShown) {
-        nextChord = cand;
-        beatsUntil = j - activeBeatIdx;
-        break;
+      if (cand !== lastPushed) {
+        if (!nextChord) {
+          nextChord = cand;
+          beatsUntil = j - activeBeatIdx;
+          nextChordJumpTime = beats[j].start;
+        } else if (upcoming.length < 3) {
+          upcoming.push(cand);
+        }
+        lastPushed = cand;
+        if (upcoming.length >= 3) break;
       }
     }
+
     if (nextChord) {
       nowPlayingNextChordEl.textContent = nextChord;
       nowPlayingCountdownEl.textContent = `in ${beatsUntil} beat${beatsUntil === 1 ? "" : "s"}`;
+      if (nextChord !== lastDisplayedNextChord) {
+        lastDisplayedNextChord = nextChord;
+        renderDiagramInto(npNextDiagram, nextChord, true);
+      }
     } else {
       nowPlayingNextChordEl.textContent = "End";
       nowPlayingCountdownEl.textContent = "";
+      npNextDiagram.innerHTML = "";
+      npNextDiagram.hidden = true;
+      lastDisplayedNextChord = null;
     }
+    npUpcomingEl.textContent = upcoming.length ? upcoming.join(" → ") : "—";
 
     if (barIdx !== lastActiveBarIdx) {
       lastActiveBarIdx = barIdx;
-      if (autoScrollEnabled && !audioPlayer.paused && barNodes[barIdx]) {
+      renderFollowTeleprompter(barIdx);
+      if (!followMode && autoScrollEnabled && !audioPlayer.paused && barNodes[barIdx]) {
         scrollBarIntoView(barNodes[barIdx]);
       }
     }
   } else if (beats.length > 0) {
-    nowPlayingChordEl.textContent = getDisplayedChord(beats[0].chord);
+    const firstChord = getDisplayedChord(beats[0].chord);
+    nowPlayingChordEl.textContent = firstChord;
     nowPlayingNextChordEl.textContent = "—";
     nowPlayingCountdownEl.textContent = "";
+    npBeatDots.forEach((dot) => dot.classList.remove("is-active"));
+    npBarProgress.style.width = "0%";
+    if (firstChord !== lastDisplayedCurrentChord) {
+      lastDisplayedCurrentChord = firstChord;
+      const shapeInfo = getActiveShapeForChord(firstChord);
+      npSimplifiedTag.hidden = !shapeInfo.simplified;
+      renderDiagramInto(npCurrentDiagram, firstChord, false);
+    }
   }
 
   for (const node of sectionNodes) {
-    const active = t >= node.sec.start && t < node.sec.end;
+    const active = curT >= node.sec.start && curT < node.sec.end;
     node.btn.classList.toggle("is-active", active);
   }
 }
 
 document.addEventListener("keydown", (event) => {
+  if (event.code === "Escape" && !chordPopover.hidden) {
+    chordPopover.hidden = true;
+    return;
+  }
   const tag = (event.target && event.target.tagName) ? event.target.tagName.toLowerCase() : "";
   if (tag === "input" || tag === "textarea" || tag === "select") return;
   if (!currentAnalysis || !currentAnalysis.beat_chords || currentAnalysis.beat_chords.length === 0) return;
@@ -773,15 +1068,7 @@ document.addEventListener("keydown", (event) => {
     }
   } else if (event.code === "ArrowLeft" || event.code === "ArrowRight") {
     event.preventDefault();
-    const step = event.code === "ArrowRight" ? 1 : -1;
-    const totalBars = barNodes.length;
-    const targetBar = Math.max(0, Math.min(totalBars - 1, (lastActiveBarIdx < 0 ? 0 : lastActiveBarIdx) + step));
-    const targetBeat = currentAnalysis.beat_chords[targetBar * 4];
-    if (targetBeat) {
-      audioPlayer.currentTime = targetBeat.start;
-      updatePlayhead();
-      scrollBarIntoView(barNodes[targetBar]);
-    }
+    jumpByBars(event.code === "ArrowRight" ? 1 : -1);
   }
 });
 
