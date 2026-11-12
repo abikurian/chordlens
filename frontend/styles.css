@@ -395,10 +395,10 @@ body {
 }
 
 .np-main-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
-  gap: 1.25rem;
+  gap: 1rem;
   min-height: 98px;
 }
 
@@ -413,7 +413,7 @@ body {
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 0.75rem;
   min-height: 44px;
   min-width: 0;
 }
@@ -422,7 +422,45 @@ body {
   display: flex;
   flex-direction: column;
   gap: 0.1rem;
-  min-width: 6.5rem;
+  min-width: 0;
+  flex: 0 1 auto;
+}
+
+/* Lead-sheet chord typesetting */
+.chord-label {
+  display: inline-flex;
+  align-items: baseline;
+  white-space: nowrap;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+}
+
+.chord-acc {
+  font-size: 0.78em;
+  position: relative;
+  top: -0.1em;
+  margin-left: 0.02em;
+}
+
+.chord-qual {
+  font-size: 0.56em;
+  font-weight: 600;
+  line-height: 0;
+  position: relative;
+  top: -0.36em;
+  margin-left: 0.04em;
+  vertical-align: baseline;
+}
+
+.chord-slash {
+  font-size: 0.72em;
+  font-weight: 600;
+  color: var(--ink-muted);
+  margin-left: 0.05em;
+}
+
+.beat-cell.active .chord-slash {
+  color: rgba(255, 255, 255, 0.88);
 }
 
 .np-caption {
@@ -578,9 +616,11 @@ body {
 }
 
 .beat-dot {
-  width: 24px;
+  min-width: 24px;
+  width: auto;
   height: 24px;
-  border-radius: 50%;
+  padding: 0 6px;
+  border-radius: 999px;
   border: 1px solid var(--rule);
   display: inline-flex;
   align-items: center;
@@ -800,17 +840,23 @@ body {
 }
 
 .bar-beats {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(var(--beats-per-bar, 4), minmax(0, 1fr));
   align-items: baseline;
-  gap: 0.5rem 0.75rem;
+  gap: 0;
+}
+
+.bar-beats.follow-beats {
+  display: flex;
 }
 
 .beat-cell {
   appearance: none;
   background: transparent;
   border: 0;
-  padding: 0.25rem 0.35rem;
+  padding: 0.25rem 0.2rem;
+  min-width: 0;
+  width: 100%;
   min-height: 44px;
   border-radius: 6px;
   font-family: var(--font-display);
@@ -819,8 +865,19 @@ body {
   color: var(--ink);
   cursor: pointer;
   display: inline-flex;
+  flex-direction: column;
   align-items: center;
-  gap: 0.35rem;
+  justify-content: center;
+  gap: 0.15rem;
+  overflow: hidden;
+}
+
+.beat-chord-text {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-align: center;
 }
 
 .beat-cell:hover {
@@ -1058,7 +1115,11 @@ body {
 
   .bar-card {
     min-width: 0;
-    padding: 0.4rem 0.65rem;
+    padding: 0.4rem 0.5rem;
+  }
+
+  .beat-cell {
+    padding: 0.2rem 0.1rem;
   }
 
   .topbar {

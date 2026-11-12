@@ -233,6 +233,87 @@ function getDisplayedChord(rawChord) {
   return showShapesMode && capoFret > 0 ? getShapeChord(rawChord) : getSoundingChord(rawChord);
 }
 
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function formatAccidentals(str) {
+  return escapeHtml(str).replace(/#/g, "♯").replace(/b/g, "♭");
+}
+
+function parseChordParts(chordName) {
+  if (!chordName || chordName === "N" || chordName === "—" || chordName === "End") {
+    return { plain: chordName || "—" };
+  }
+  const match = String(chordName).match(/^([A-G])([#b]?)(.*?)(?:\/([A-G][#b]?))?$/);
+  if (!match) {
+    return { plain: String(chordName) };
+  }
+  const [, letter, acc, qual, slash] = match;
+  return {
+    letter,
+    acc: acc ? formatAccidentals(acc) : "",
+    qual: qual ? formatAccidentals(qual) : "",
+    slash: slash ? formatAccidentals(slash) : "",
+  };
+}
+
+function formatChordHtml(chordName) {
+  const parts = parseChordParts(chordName);
+  if (parts.plain !== undefined) {
+    return `<span class="chord-label">${escapeHtml(parts.plain)}</span>`;
+  }
+  const accHtml = parts.acc ? `<span class="chord-acc">${parts.acc}</span>` : "";
+  const qualHtml = parts.qual ? `<sup class="chord-qual">${parts.qual}</sup>` : "";
+  const slashHtml = parts.slash ? `<span class="chord-slash">/${parts.slash}</span>` : "";
+  return `<span class="chord-label"><span class="chord-root">${escapeHtml(parts.letter)}${accHtml}</span>${qualHtml}${slashHtml}</span>`;
+}
+
+/**
+ * Render a chord into `el` using lead-sheet typesetting and shrink down to `minPx`
+ * if needed. If it still overflows at `minPx`, fall back to the Simple chord form
+ * with the full chord name preserved in `title` and `aria-label` (never ellipsis).
+ */
+function fitChordElement(el, rawChord, { minPx = 11 } = {}) {
+  if (!el) return;
+  const text = rawChord || "—";
+  el.style.fontSize = "";
+  el.innerHTML = formatChordHtml(text);
+  if (text && text !== "—" && text !== "End" && text !== "N") {
+    el.title = text;
+  } else {
+    el.removeAttribute("title");
+  }
+
+  const availW = el.clientWidth;
+  if (!availW || text === "—" || text === "End" || text === "N") return;
+
+  const computedPx = parseFloat(window.getComputedStyle(el).fontSize) || 18;
+  let px = computedPx;
+  while (el.scrollWidth > availW + 1 && px > minPx) {
+    px = Math.max(minPx, px - 1);
+    el.style.fontSize = `${px}px`;
+  }
+
+  if (el.scrollWidth > availW + 1) {
+    const simple = simplifyChord(text);
+    if (simple && simple !== text) {
+      el.innerHTML = formatChordHtml(simple);
+      el.title = `${text} (shown simplified)`;
+      px = computedPx;
+      el.style.fontSize = "";
+      while (el.scrollWidth > availW + 1 && px > minPx) {
+        px = Math.max(minPx, px - 1);
+        el.style.fontSize = `${px}px`;
+      }
+    }
+  }
+}
+
 function formatTime(seconds) {
   const s = Math.max(0, Math.floor(seconds));
   const mins = Math.floor(s / 60);
@@ -465,7 +546,15 @@ function renderAnalysis(data) {
         `Bar ${barIdx + 1} beat ${offset + 1}, chord ${shownChord}, confidence ${confPct}%`
       );
       const detailHtml = `<span class="beat-meta">b${offset + 1} · ${beat.edited ? "edited" : `${confPct}%`}</span>`;
-      cell.innerHTML = `<span>${isChange ? shownChord : ""}</span>${detailHtml}`;
+      const chordSpan = document.createElement("span");
+      chordSpan.className = "beat-chord-text";
+      cell.appendChild(chordSpan);
+      cell.insertAdjacentHTML("beforeend", detailHtml);
+      if (isChange) {
+        cell.dataset.chordText = shownChord;
+      } else {
+        cell.dataset.chordText = "";
+      }
 
       cell.addEventListener("click", () => {
         if (isEditMode) {
@@ -486,6 +575,22 @@ function renderAnalysis(data) {
     barCard.appendChild(beatsRow);
     barNodes[barIdx] = barCard;
     leadSheetEl.appendChild(barCard);
+  }
+  fitAllChartChords();
+}
+
+function fitAllChartChords() {
+  for (const node of beatNodes) {
+    if (!node || !node.cell) continue;
+    const text = node.cell.dataset.chordText || "";
+    const span = node.cell.querySelector(".beat-chord-text");
+    if (!span) continue;
+    if (!text) {
+      span.innerHTML = "";
+      span.style.fontSize = "";
+      continue;
+    }
+    fitChordElement(span, text, { minPx: 11 });
   }
 }
 
@@ -648,7 +753,11 @@ function renderDiagramInto(container, chordName, compact) {
 function openChordPopover(chordName) {
   if (!chordName || chordName === "N" || !window.ChordShapes) return;
   const { alternatives, simplified, notes } = getActiveShapeForChord(chordName);
-  popoverTitle.textContent = simplified ? `${chordName} (simplified shape)` : chordName;
+  if (popoverTitle) {
+    popoverTitle.innerHTML = simplified
+      ? `${formatChordHtml(chordName)} <span class="popover-simplified-note">(simplified shape)</span>`
+      : formatChordHtml(chordName);
+  }
   popoverNotes.textContent = notes.length ? `Notes: ${notes.join(" · ")}` : "";
   popoverShapes.innerHTML = "";
 
@@ -699,7 +808,8 @@ function renderFollowTeleprompter(currentBarIdx) {
 
     const card = document.createElement("div");
     card.className = `bar-card ${bIdx < currentBarIdx ? "played" : ""} ${bIdx === currentBarIdx ? "active" : ""}`;
-    card.innerHTML = `<div class="bar-beats"><span class="beat-cell">${tokens.join(" · ")}</span></div>`;
+    const tokensHtml = tokens.map((tok) => (tok === "/" ? `<span class="follow-slash">/</span>` : formatChordHtml(tok))).join(" ");
+    card.innerHTML = `<div class="bar-beats follow-beats"><span class="beat-cell">${tokensHtml}</span></div>`;
     row.appendChild(card);
   }
   followTeleprompter.appendChild(row);
@@ -789,7 +899,7 @@ function findActiveBeatIndex(beats, t) {
 }
 
 function getLaneBeatPx() {
-  return window.innerWidth <= 767 ? 44 : 56;
+  return window.innerWidth <= 767 ? 68 : 80;
 }
 
 function buildChordLane(beats) {
@@ -825,7 +935,6 @@ function buildChordLane(beats) {
     btn.type = "button";
     btn.className = "lane-block";
     btn.style.width = `${seg.beatCount * beatPx}px`;
-    btn.textContent = seg.chord;
     btn.setAttribute("aria-label", `${seg.chord}, ${seg.beatCount} beat${seg.beatCount === 1 ? "" : "s"}`);
     btn.addEventListener("click", () => {
       if (laneDragMoved) return;
@@ -833,6 +942,7 @@ function buildChordLane(beats) {
       updatePlayhead();
     });
     chordLaneTrack.appendChild(btn);
+    fitChordElement(btn, seg.chord, { minPx: 11 });
     laneBlocks.push({ ...seg, el: btn });
   }
 }
@@ -961,8 +1071,8 @@ function updatePlayhead() {
     npBarProgress.style.width = `${pct.toFixed(1)}%`;
 
     const curShown = getDisplayedChord(beat.chord);
-    nowPlayingChordEl.textContent = curShown;
     if (curShown !== lastLaneChord) {
+      fitChordElement(nowPlayingChordEl, curShown, { minPx: 20 });
       if (lastLaneChord !== null) {
         triggerPlayheadFlash();
       }
@@ -992,7 +1102,11 @@ function updatePlayhead() {
     const isNowWindow = nextChord && beatsUntil === 1 && beatFrac >= 0.7;
 
     if (nextChord) {
-      nowPlayingNextChordEl.textContent = nextChord;
+      if (nextChord !== lastDisplayedNextChord) {
+        fitChordElement(nowPlayingNextChordEl, nextChord, { minPx: 13 });
+        lastDisplayedNextChord = nextChord;
+        renderDiagramInto(npNextDiagram, nextChord, true);
+      }
       if (isNowWindow) {
         nowPlayingCountdownEl.textContent = "now";
       } else if (beatsUntil <= Math.max(3, earlyBeats)) {
@@ -1000,12 +1114,9 @@ function updatePlayhead() {
       } else {
         nowPlayingCountdownEl.textContent = `in ${beatsUntil} beats`;
       }
-      if (nextChord !== lastDisplayedNextChord) {
-        lastDisplayedNextChord = nextChord;
-        renderDiagramInto(npNextDiagram, nextChord, true);
-      }
     } else {
       nowPlayingNextChordEl.textContent = "End";
+      nowPlayingNextChordEl.style.fontSize = "";
       nowPlayingCountdownEl.textContent = "";
       if (npNextDiagram) npNextDiagram.innerHTML = "";
       lastDisplayedNextChord = null;
@@ -1039,8 +1150,9 @@ function updatePlayhead() {
     }
   } else if (beats.length > 0) {
     const firstChord = getDisplayedChord(beats[0].chord);
-    nowPlayingChordEl.textContent = firstChord;
+    fitChordElement(nowPlayingChordEl, firstChord, { minPx: 20 });
     nowPlayingNextChordEl.textContent = "—";
+    nowPlayingNextChordEl.style.fontSize = "";
     nowPlayingCountdownEl.textContent = "";
     npBeatDots.forEach((dot, idx) => {
       dot.textContent = String(idx + 1);

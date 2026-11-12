@@ -122,6 +122,10 @@ def capture_all(all_views: bool = False) -> list[Path]:
                         const res = await fetch('/fixture/sample_result.json');
                         const data = await res.json();
                         renderAnalysis(data);
+                        const detailBtn = document.getElementById('chord-detail-btn');
+                        if (detailBtn && detailBtn.getAttribute('aria-pressed') !== 'true') {
+                            detailBtn.click();
+                        }
                         await new Promise((resolve) => {
                             const audio = document.getElementById('audio-player');
                             if (audio.readyState >= 1) return resolve();
