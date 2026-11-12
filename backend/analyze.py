@@ -625,6 +625,9 @@ def analyze_audio(
     progress_cb=None,
 ) -> dict[str, Any]:
     """Analyze audio using Fast (full-mix BTC) or Accurate (Demucs + beat_this + BTC) mode."""
+    from backend.ffmpeg_utils import configure_ffmpeg_env
+
+    configure_ffmpeg_env()
     path = Path(file_path)
     if not path.exists():
         raise FileNotFoundError(f"Audio file not found: {path}")

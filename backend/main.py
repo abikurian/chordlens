@@ -16,6 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from backend.analyze import analyze_audio
+from backend.ffmpeg_utils import friendly_error_message, log_startup_toolchain
 from backend.youtube import download_youtube_audio, normalize_youtube_url
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -30,6 +31,11 @@ EXECUTOR = ThreadPoolExecutor(max_workers=2)
 JOBS: dict[str, dict[str, Any]] = {}
 
 app = FastAPI(title="ChordLens", version="0.2.0")
+
+
+@app.on_event("startup")
+def on_startup() -> None:
+    log_startup_toolchain()
 
 
 @app.middleware("http")
@@ -131,7 +137,7 @@ async def analyze_upload(
         dest.unlink(missing_ok=True)
         raise HTTPException(
             status_code=500,
-            detail=f"Analysis failed: {exc}. Try converting the file to WAV or MP3 and retry.",
+            detail=friendly_error_message(exc, context="analysis"),
         ) from exc
 
     return {
@@ -157,7 +163,7 @@ def analyze_url(payload: AnalyzeUrlRequest) -> dict:
     except Exception as exc:
         raise HTTPException(
             status_code=500,
-            detail=f"Could not analyze YouTube audio: {exc}",
+            detail=friendly_error_message(exc, context="youtube"),
         ) from exc
 
     return {
@@ -185,7 +191,7 @@ def _run_file_job(job_id: str, audio_id: str, dest: Path, title: str, mode: str)
     except Exception as exc:
         dest.unlink(missing_ok=True)
         JOBS[job_id]["status"] = "error"
-        JOBS[job_id]["error"] = str(exc)
+        JOBS[job_id]["error"] = friendly_error_message(exc, context="analysis")
 
 
 def _run_url_job(
@@ -214,7 +220,7 @@ def _run_url_job(
         }
     except Exception as exc:
         JOBS[job_id]["status"] = "error"
-        JOBS[job_id]["error"] = str(exc)
+        JOBS[job_id]["error"] = friendly_error_message(exc, context="youtube")
 
 
 @app.post("/api/jobs/analyze")

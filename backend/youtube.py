@@ -3,11 +3,16 @@
 from __future__ import annotations
 
 import json
-import shutil
 import subprocess
 import sys
 from pathlib import Path
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
+
+from backend.ffmpeg_utils import (
+    configure_ffmpeg_env,
+    friendly_error_message,
+    friendly_missing_ffmpeg_message,
+)
 
 MAX_YOUTUBE_DURATION_SEC = 12 * 60  # 12 minutes
 ALLOWED_COOKIE_BROWSERS = {"chrome", "edge", "firefox", "brave", "opera", "safari"}
@@ -79,12 +84,12 @@ def is_valid_youtube_url(url: str) -> bool:
         return False
 
 
-def _detect_js_runtime_args() -> list[str]:
+def _detect_js_runtime_args(toolchain: dict[str, str | None]) -> list[str]:
     """Return yt-dlp --js-runtimes args if Deno or Node is installed."""
-    if shutil.which("deno"):
-        return ["--js-runtimes", "deno"]
-    if shutil.which("node"):
-        return ["--js-runtimes", "node"]
+    if toolchain.get("deno"):
+        return ["--js-runtimes", f"deno:{toolchain['deno']}"]
+    if toolchain.get("node"):
+        return ["--js-runtimes", f"node:{toolchain['node']}"]
     return []
 
 
@@ -135,12 +140,9 @@ def download_youtube_audio(
     Returns (wav_path, video_title).
     """
     clean_url = normalize_youtube_url(url)
-
-    if shutil.which("ffmpeg") is None:
-        raise RuntimeError(
-            "ffmpeg was not found on PATH inside the server environment. "
-            "Install ffmpeg and restart the server, or upload an audio file directly."
-        )
+    toolchain = configure_ffmpeg_env()
+    if not toolchain.get("ffmpeg"):
+        raise RuntimeError(friendly_missing_ffmpeg_message())
 
     cookie_args: list[str] = []
     if cookies_browser:
@@ -149,8 +151,12 @@ def download_youtube_audio(
             raise ValueError(f"Unsupported cookie browser '{cookies_browser}'.")
         cookie_args = ["--cookies-from-browser", browser]
 
-    js_args = _detect_js_runtime_args()
-    base_cmd = [sys.executable, "-m", "yt_dlp", "--no-playlist", *js_args, *cookie_args]
+    ffmpeg_args: list[str] = []
+    if toolchain.get("ffmpeg_dir"):
+        ffmpeg_args = ["--ffmpeg-location", str(toolchain["ffmpeg_dir"])]
+
+    js_args = _detect_js_runtime_args(toolchain)
+    base_cmd = [sys.executable, "-m", "yt_dlp", "--no-playlist", *ffmpeg_args, *js_args, *cookie_args]
 
     # Fetch title and duration first (fast, no download)
     title = "YouTube Audio"
@@ -166,6 +172,8 @@ def download_youtube_audio(
         raise RuntimeError(
             "Timed out checking YouTube video details. Try again or download the audio yourself and use the upload box."
         ) from exc
+    except FileNotFoundError as exc:
+        raise RuntimeError(friendly_error_message(exc, context="youtube")) from exc
 
     if info_proc.returncode == 0 and info_proc.stdout.strip():
         try:
@@ -209,6 +217,8 @@ def download_youtube_audio(
         raise RuntimeError(
             "YouTube download timed out. Try a shorter video or download the audio yourself and use the upload box."
         ) from exc
+    except FileNotFoundError as exc:
+        raise RuntimeError(friendly_error_message(exc, context="youtube")) from exc
 
     if proc.returncode != 0:
         err = (proc.stderr or proc.stdout or "Unknown yt-dlp error").strip()
