@@ -6,6 +6,8 @@
   --ink-muted: #4a5752;
   --ink-played: #5e6b66;
   --rule: #cfd8d4;
+  --bar-line: #8c9c96;
+  --beat-divider: #dde4e1;
   --accent: #0f766e;
   --accent-hover: #0d635c;
   --accent-soft: #e6f4f1;
@@ -590,10 +592,39 @@ body {
   will-change: transform;
 }
 
+.lane-grid-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.lane-bar-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  border-left: 2px solid var(--bar-line);
+}
+
+.lane-bar-line.estimated {
+  border-left-style: dashed;
+}
+
+.lane-beat-tick {
+  position: absolute;
+  top: 18%;
+  bottom: 18%;
+  width: 0;
+  border-left: 1px solid var(--beat-divider);
+}
+
 .lane-block {
+  position: relative;
+  z-index: 1;
   appearance: none;
   border: 0;
-  border-left: 2px solid var(--rule);
+  border-left: 1px solid var(--rule);
   background: transparent;
   padding: 0 0.65rem;
   min-height: 44px;
@@ -820,19 +851,37 @@ body {
   padding: 1rem 0.75rem;
 }
 
-/* Lead sheet chart: 4 bars per row, light spacing + thin bar line */
+.beat-grid-note {
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: var(--text-caption);
+  font-variant-numeric: tabular-nums;
+}
+
+.beat-grid-detail {
+  margin: calc(-1 * var(--space-4)) 0 0;
+  color: var(--ink-muted);
+  font-size: var(--text-caption);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Lead sheet chart: 4 bars per row, light spacing + clear bar line */
 .lead-sheet {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 1.75rem 0;
+  gap: var(--space-6) 0;
 }
 
 .bar-card {
-  border-left: 1px solid var(--rule);
-  padding: 0.5rem 0.9rem;
+  border-left: 2px solid var(--bar-line);
+  padding: var(--space-2) var(--space-3);
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: var(--space-1);
+}
+
+.bar-card.bar-estimated {
+  border-left-style: dashed;
 }
 
 .bar-card.played .beat-cell {
@@ -843,6 +892,16 @@ body {
   border-left: 3px solid var(--accent);
   background: var(--accent-soft);
   border-radius: 0 var(--radius) var(--radius) 0;
+}
+
+.bar-card.bar-reliable .beat-cell + .beat-cell {
+  border-left: 1px solid var(--beat-divider);
+  border-radius: 0;
+}
+
+.bar-card.bar-reliable .beat-cell.active {
+  border-left-color: transparent;
+  border-radius: 6px;
 }
 
 .bar-head {

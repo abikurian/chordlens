@@ -46,6 +46,8 @@ const npPlayBtn = document.getElementById("np-play-btn");
 const npNextBarBtn = document.getElementById("np-next-bar-btn");
 const npSeekSlider = document.getElementById("np-seek-slider");
 const jumpToBarBtn = document.getElementById("jump-to-bar-btn");
+const beatGridNoteEl = document.getElementById("beat-grid-note");
+const beatGridDetailEl = document.getElementById("beat-grid-detail");
 
 const chordPopover = document.getElementById("chord-popover");
 const popoverTitle = document.getElementById("popover-title");
@@ -445,6 +447,108 @@ function updatePlayAlongUI() {
   updateSettingsDot();
 }
 
+/**
+ * Reliability definition for a bar's beat grid:
+ * 1. Beat tracking engine must be 'beat_this' (not the librosa fallback).
+ * 2. No beats inside this bar were estimated/filled in (beat.estimated === false).
+ * 3. Every beat-to-beat interval inside the bar stays within 15% of the song's median beat spacing.
+ * 4. The downbeat at the start of the bar comes directly from the model (exists in data.downbeats).
+ */
+function evaluateBarReliability(data, beatsPerBar = 4) {
+  const beatChords = data.beat_chords || [];
+  const downbeatsSet = new Set((data.downbeats || []).map((t) => Number(t).toFixed(3)));
+  const totalBars = Math.ceil(beatChords.length / beatsPerBar);
+
+  const intervals = [];
+  for (let i = 0; i < beatChords.length - 1; i += 1) {
+    const diff = beatChords[i + 1].start - beatChords[i].start;
+    if (diff > 0.05 && diff < 5.0) intervals.push(diff);
+  }
+  intervals.sort((a, b) => a - b);
+  const medianSpacing = intervals.length ? intervals[Math.floor(intervals.length / 2)] : 0.5;
+  const isEngineReliable = (data.beat_engine || "") === "beat_this";
+
+  const barStatus = [];
+  for (let b = 0; b < totalBars; b += 1) {
+    const slice = beatChords.slice(b * beatsPerBar, (b + 1) * beatsPerBar);
+    if (!slice.length) {
+      barStatus.push(false);
+      continue;
+    }
+    const hasEstimated = slice.some((item) => Boolean(item.estimated));
+    const firstBeatTime = Number(slice[0].start).toFixed(3);
+    const hasDownbeat = downbeatsSet.has(firstBeatTime);
+
+    let spacingOk = true;
+    for (let k = 0; k < slice.length - 1; k += 1) {
+      const sp = slice[k + 1].start - slice[k].start;
+      if (Math.abs(sp - medianSpacing) / medianSpacing > 0.15) {
+        spacingOk = false;
+        break;
+      }
+    }
+
+    const reliable = isEngineReliable && !hasEstimated && hasDownbeat && spacingOk;
+    barStatus.push(reliable);
+  }
+  return { barStatus, medianSpacing, isEngineReliable };
+}
+
+function updateBeatGridNotes(data, barStatus) {
+  if (!beatGridNoteEl) return;
+  const totalBars = barStatus.length;
+  const estimatedBarIndices = [];
+  for (let i = 0; i < totalBars; i += 1) {
+    if (!barStatus[i]) estimatedBarIndices.push(i + 1);
+  }
+
+  if (estimatedBarIndices.length === 0) {
+    beatGridNoteEl.hidden = true;
+    beatGridNoteEl.textContent = "";
+    if (beatGridDetailEl) {
+      beatGridDetailEl.hidden = true;
+      beatGridDetailEl.textContent = "";
+    }
+    return;
+  }
+
+  // Group contiguous bar ranges (e.g. 13-16, 25-28)
+  const ranges = [];
+  let rangeStart = estimatedBarIndices[0];
+  let prev = estimatedBarIndices[0];
+  for (let k = 1; k < estimatedBarIndices.length; k += 1) {
+    const cur = estimatedBarIndices[k];
+    if (cur === prev + 1) {
+      prev = cur;
+    } else {
+      ranges.push(rangeStart === prev ? `bar ${rangeStart}` : `bars ${rangeStart}–${prev}`);
+      rangeStart = cur;
+      prev = cur;
+    }
+  }
+  ranges.push(rangeStart === prev ? `bar ${rangeStart}` : `bars ${rangeStart}–${prev}`);
+
+  beatGridNoteEl.hidden = false;
+  beatGridNoteEl.textContent = `Beat grid estimated in ${ranges.join(", ")}`;
+
+  if (beatGridDetailEl) {
+    if (showMoreDetail) {
+      beatGridDetailEl.hidden = false;
+      const engineNote = data.beat_engine_note ? ` (${data.beat_engine_note})` : "";
+      beatGridDetailEl.textContent = `Beat engine: ${data.beat_engine || "unknown"}${engineNote} · ${data.beats_estimated || 0} estimated beat(s)`;
+    } else {
+      beatGridDetailEl.hidden = true;
+      beatGridDetailEl.textContent = "";
+    }
+  }
+}
+
+function parseBeatsPerBar(timeSig) {
+  if (!timeSig || typeof timeSig !== "string") return 4;
+  const num = parseInt(timeSig.split("/")[0], 10);
+  return Number.isFinite(num) && num >= 2 && num <= 12 ? num : 4;
+}
+
 function renderAnalysis(data) {
   currentAnalysis = data;
   inputView.hidden = true;
@@ -460,8 +564,9 @@ function renderAnalysis(data) {
   audioPlayer.preservesPitch = true;
 
   const beatChords = data.beat_chords || [];
-  const beatsPerBar = 4;
+  const beatsPerBar = parseBeatsPerBar(data.time_signature);
   const totalBars = Math.ceil(beatChords.length / beatsPerBar);
+  const { barStatus } = evaluateBarReliability(data, beatsPerBar);
 
   nowPlayingStrip.hidden = beatChords.length === 0;
   leadSheetEl.hidden = followMode;
@@ -474,7 +579,8 @@ function renderAnalysis(data) {
   lastLaneChord = null;
 
   updatePlayAlongUI();
-  buildChordLane(beatChords);
+  updateBeatGridNotes(data, barStatus);
+  buildChordLane(beatChords, barStatus, beatsPerBar);
   renderFollowTeleprompter(0);
 
   beatNodes = [];
@@ -511,7 +617,8 @@ function renderAnalysis(data) {
     const barStartTime = barBeats[0] ? barBeats[0].start : 0;
 
     const barCard = document.createElement("div");
-    barCard.className = "bar-card";
+    const isReliable = Boolean(barStatus[barIdx]);
+    barCard.className = `bar-card ${isReliable ? "bar-reliable" : "bar-estimated"}`;
     barCard.dataset.barIndex = String(barIdx);
 
     const barHead = document.createElement("div");
@@ -521,6 +628,7 @@ function renderAnalysis(data) {
 
     const beatsRow = document.createElement("div");
     beatsRow.className = "bar-beats";
+    beatsRow.style.setProperty("--beats-per-bar", String(beatsPerBar));
 
     for (let offset = 0; offset < beatsPerBar; offset += 1) {
       const beat = barBeats[offset];
@@ -902,13 +1010,35 @@ function getLaneBeatPx() {
   return window.innerWidth <= 767 ? 68 : 80;
 }
 
-function buildChordLane(beats) {
+function buildChordLane(beats, barStatus = [], beatsPerBar = 4) {
   if (!chordLaneTrack) return;
   chordLaneTrack.innerHTML = "";
   laneBlocks = [];
   if (!beats || beats.length === 0) return;
 
   const beatPx = getLaneBeatPx();
+  const gridLayer = document.createElement("div");
+  gridLayer.className = "lane-grid-layer";
+  gridLayer.setAttribute("aria-hidden", "true");
+
+  for (let i = 0; i < beats.length; i += 1) {
+    const barIdx = Math.floor(i / beatsPerBar);
+    const beatInBar = i % beatsPerBar;
+    const isReliable = barStatus.length ? Boolean(barStatus[barIdx]) : true;
+    const x = i * beatPx;
+    if (beatInBar === 0) {
+      const barLine = document.createElement("span");
+      barLine.className = `lane-bar-line ${isReliable ? "" : "estimated"}`;
+      barLine.style.left = `${x}px`;
+      gridLayer.appendChild(barLine);
+    } else if (isReliable) {
+      const beatTick = document.createElement("span");
+      beatTick.className = "lane-beat-tick";
+      beatTick.style.left = `${x}px`;
+      gridLayer.appendChild(beatTick);
+    }
+  }
+  chordLaneTrack.appendChild(gridLayer);
   const segments = [];
   for (let i = 0; i < beats.length; i += 1) {
     const b = beats[i];
