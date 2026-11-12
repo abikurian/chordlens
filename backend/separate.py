@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import librosa
@@ -9,6 +10,10 @@ import numpy as np
 import torch
 
 _DEMUCS_MODEL = None
+
+# Configure CPU thread count once for PyTorch inference
+_CPU_THREADS = max(1, min(8, os.cpu_count() or 4))
+torch.set_num_threads(_CPU_THREADS)
 
 
 def _get_demucs_model():
@@ -40,13 +45,14 @@ def separate_stems(file_path: str | Path) -> tuple[np.ndarray, np.ndarray, int]:
     wav_tensor = torch.tensor(y_stereo, dtype=torch.float32).unsqueeze(0)  # [1, 2, T]
 
     with torch.no_grad():
-        # sources shape: [1, n_sources, 2, T]
+        # shifts=0 and segment=8 speed up CPU inference while keeping stem quality
         sources = apply_model(
             model,
             wav_tensor,
             device="cpu",
-            shifts=1,
+            shifts=0,
             split=True,
+            segment=8,
             overlap=0.25,
             progress=False,
         )[0]

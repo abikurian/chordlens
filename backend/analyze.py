@@ -506,16 +506,21 @@ def analyze_audio(
     file_path: str | Path,
     use_phase2: bool = True,
     use_cache: bool = True,
+    mode: str = "accurate",
+    progress_cb=None,
 ) -> dict[str, Any]:
-    """Analyze audio using Phase 2 (Demucs + beat_this + BTC) with Phase 1 fallback and SHA-256 caching."""
+    """Analyze audio using Fast (full-mix BTC) or Accurate (Demucs + beat_this + BTC) mode."""
     path = Path(file_path)
     if not path.exists():
         raise FileNotFoundError(f"Audio file not found: {path}")
 
+    clean_mode = "fast" if mode == "fast" else "accurate"
     file_hash = _file_sha256(path)
-    mode_tag = CACHE_VERSION if use_phase2 else "v1"
+    mode_tag = f"{clean_mode}_{CACHE_VERSION}" if use_phase2 else "v1"
     cache_path = CACHE_DIR / f"{file_hash}_{mode_tag}.json"
     if use_cache and cache_path.exists():
+        if progress_cb:
+            progress_cb("Loaded cached analysis.")
         cached = json.loads(cache_path.read_text(encoding="utf-8"))
         cached["cached"] = True
         return cached
@@ -552,34 +557,52 @@ def analyze_audio(
     # --- Phase 2 pipeline ---
     pipeline_parts = []
 
-    # 1. Demucs stem separation on CPU
-    try:
-        from backend.separate import separate_stems
-
-        drums_mono, harm_mix_mono, stem_sr = separate_stems(path)
-        duration = float(len(harm_mix_mono) / stem_sr)
-        if duration < 0.5 or (np.max(np.abs(harm_mix_mono)) < 1e-6 and np.max(np.abs(drums_mono)) < 1e-6):
-            raise ValueError("The audio file appears to be empty or silent.")
-        pipeline_parts.append("demucs")
-    except ValueError:
-        raise
-    except Exception as exc:
-        logger.warning("Demucs failed (%s); falling back to librosa HPSS.", exc)
+    # 1. Audio loading & optional Demucs stem separation
+    if clean_mode == "fast":
+        if progress_cb:
+            progress_cb("Loading audio (Fast mode)...")
         stem_sr = 22050
         y, stem_sr = librosa.load(str(path), sr=stem_sr, mono=True)
         duration = float(librosa.get_duration(y=y, sr=stem_sr))
         if duration < 0.5 or np.max(np.abs(y)) < 1e-6:
             raise ValueError("The audio file appears to be empty or silent.")
-        harm_mix_mono, drums_mono = librosa.effects.hpss(y)
-        pipeline_parts.append("hpss")
+        harm_mix_mono = y
+        drums_mono = y
+        pipeline_parts.append("fullmix")
+    else:
+        if progress_cb:
+            progress_cb("Separating stems with Demucs (Accurate mode)...")
+        try:
+            from backend.separate import separate_stems
 
-    # 2. Beat & downbeat tracking (beat_this on drums, fallback to librosa)
+            drums_mono, harm_mix_mono, stem_sr = separate_stems(path)
+            duration = float(len(harm_mix_mono) / stem_sr)
+            if duration < 0.5 or (np.max(np.abs(harm_mix_mono)) < 1e-6 and np.max(np.abs(drums_mono)) < 1e-6):
+                raise ValueError("The audio file appears to be empty or silent.")
+            pipeline_parts.append("demucs")
+        except ValueError:
+            raise
+        except Exception as exc:
+            logger.warning("Demucs failed (%s); falling back to librosa HPSS.", exc)
+            stem_sr = 22050
+            y, stem_sr = librosa.load(str(path), sr=stem_sr, mono=True)
+            duration = float(librosa.get_duration(y=y, sr=stem_sr))
+            if duration < 0.5 or np.max(np.abs(y)) < 1e-6:
+                raise ValueError("The audio file appears to be empty or silent.")
+            harm_mix_mono, drums_mono = librosa.effects.hpss(y)
+            pipeline_parts.append("hpss")
+
+    # 2. Beat & downbeat tracking (beat_this, fallback to librosa)
+    if progress_cb:
+        progress_cb("Tracking beats and downbeats...")
     beat_source = drums_mono if np.max(np.abs(drums_mono)) > 1e-4 else harm_mix_mono
     beats_estimated = 0
     beat_engine = "beat_this"
     beat_engine_note = ""
     try:
-        tempo, beat_times, downbeats, time_sig = _track_beats_beat_this(beat_source, stem_sr, duration)
+        tempo, beat_times, downbeats, time_sig = _track_beats_beat_this(
+            beat_source, stem_sr, duration, progress_cb=progress_cb
+        )
         pipeline_parts.append("beat_this")
     except Exception as exc:
         logger.warning("beat_this failed (%s); falling back to librosa beat_track.", exc)
@@ -592,7 +615,9 @@ def analyze_audio(
         )
         pipeline_parts.append("librosa-beats")
 
-    # 3. Chord recognition (BTC on other+bass, fallback to Phase 1)
+    # 3. Chord recognition (BTC, fallback to Phase 1)
+    if progress_cb:
+        progress_cb("Recognising chords with BTC...")
     try:
         from backend.btc_chord import predict_chords_btc
 
@@ -603,7 +628,9 @@ def analyze_audio(
         beat_chords, chords, _ = _analyze_chords_phase1(harm_mix_mono, stem_sr, beat_times, duration)
         pipeline_parts.append("librosa-chords")
 
-    # 4. Key detection via Krumhansl on other+bass harmonic mix
+    # 4. Key detection via Krumhansl on harmonic mix
+    if progress_cb:
+        progress_cb("Estimating song key...")
     harm_22k = librosa.resample(harm_mix_mono, orig_sr=stem_sr, target_sr=22050) if stem_sr != 22050 else harm_mix_mono
     tuning = float(librosa.estimate_tuning(y=harm_22k, sr=22050))
     chroma_for_key = librosa.feature.chroma_cqt(y=harm_22k, sr=22050, tuning=tuning, bins_per_octave=36)
@@ -622,6 +649,7 @@ def analyze_audio(
         "chords": chords,
         "beat_chords": beat_chords,
         "pipeline": "+".join(pipeline_parts),
+        "mode": clean_mode,
         "cached": False,
     }
 

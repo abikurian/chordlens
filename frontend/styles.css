@@ -129,6 +129,61 @@ body {
   color: var(--ink-muted);
 }
 
+.mode-fieldset {
+  border: 0;
+  margin: 0 0 1rem;
+  padding: 0;
+}
+
+.mode-fieldset legend {
+  margin-bottom: 0.45rem;
+}
+
+.mode-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.mode-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+  min-height: 44px;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: var(--bg);
+  cursor: pointer;
+}
+
+.mode-option:has(input:checked) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.mode-option input {
+  margin-top: 0.2rem;
+  accent-color: var(--accent);
+}
+
+.mode-option strong {
+  display: block;
+  font-size: 0.875rem;
+  line-height: 1.2;
+}
+
+.mode-option small {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--ink-muted);
+  line-height: 1.25;
+}
+
+.meta-item-wide {
+  grid-column: span 2;
+}
+
 .input-group {
   display: flex;
   flex-direction: column;

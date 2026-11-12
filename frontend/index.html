@@ -36,6 +36,26 @@
         <h1 class="panel-title">Analyze a track</h1>
         <p class="panel-desc">Upload an audio file or paste a YouTube link to generate a 4-beat lead sheet.</p>
 
+        <fieldset class="mode-fieldset">
+          <legend class="field-label">Analysis mode</legend>
+          <div class="mode-options">
+            <label class="mode-option">
+              <input type="radio" name="analysis-mode" value="fast" checked />
+              <span>
+                <strong>Fast</strong>
+                <small>Full-mix BTC (~15–30s)</small>
+              </span>
+            </label>
+            <label class="mode-option">
+              <input type="radio" name="analysis-mode" value="accurate" />
+              <span>
+                <strong>Accurate</strong>
+                <small>Demucs stems + BTC (~5–11 min on CPU)</small>
+              </span>
+            </label>
+          </div>
+        </fieldset>
+
         <form id="upload-form" class="input-group">
           <label for="audio-file" class="field-label">Audio file (MP3, WAV, M4A, FLAC)</label>
           <input
@@ -96,6 +116,10 @@
             <dt>Length</dt>
             <dd id="meta-duration">—</dd>
           </div>
+          <div class="meta-item meta-item-wide">
+            <dt>Beat engine</dt>
+            <dd id="meta-beat-engine">—</dd>
+          </div>
         </dl>
       </section>
     </aside>
@@ -116,7 +140,7 @@
             </span>
             <span class="legend-item">
               <span class="legend-swatch swatch-low" aria-hidden="true"></span>
-              Low confidence (&lt;55%)
+              Low model confidence (&lt;55%)
             </span>
           </div>
           <div id="chart-toolbar" class="chart-toolbar" hidden>

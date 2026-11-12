@@ -14,6 +14,7 @@ const metaKeyEl = document.getElementById("meta-key");
 const metaTempoEl = document.getElementById("meta-tempo");
 const metaTimeEl = document.getElementById("meta-time");
 const metaDurationEl = document.getElementById("meta-duration");
+const metaBeatEngineEl = document.getElementById("meta-beat-engine");
 
 const chartSubtitle = document.getElementById("chart-subtitle");
 const chartEmpty = document.getElementById("chart-empty");
@@ -68,6 +69,9 @@ function renderAnalysis(data) {
   metaTempoEl.textContent = data.tempo ? `${data.tempo} BPM` : "—";
   metaTimeEl.textContent = data.time_signature || "4/4";
   metaDurationEl.textContent = formatTime(data.duration || 0);
+  const estCount = data.beats_estimated || 0;
+  const engineLabel = data.beat_engine || "beat_this";
+  metaBeatEngineEl.textContent = estCount > 0 ? `${engineLabel} (+${estCount} filled)` : engineLabel;
 
   audioPlayer.src = data.audio_url;
   playerPanel.hidden = false;
@@ -132,8 +136,9 @@ function renderAnalysis(data) {
 
       cell.setAttribute(
         "aria-label",
-        `Bar ${barIdx + 1} beat ${offset + 1}, chord ${beat.chord}, confidence ${confPct}%${beat.low_confidence ? ", low confidence" : ""}`
+        `Bar ${barIdx + 1} beat ${offset + 1}, chord ${beat.chord}, model confidence ${confPct}%${beat.low_confidence ? ", low model confidence" : ""}`
       );
+      cell.title = `Model confidence: ${confPct}%`;
       cell.innerHTML = `
         <span class="beat-chord ${isRepeat ? "is-repeat" : ""}">${isRepeat ? "·" : beat.chord}</span>
         <span class="beat-conf">${beat.edited ? "edited" : `${confPct}%${beat.low_confidence ? " ?" : ""}`}</span>
@@ -336,6 +341,49 @@ audioPlayer.addEventListener("play", startPlayheadLoop);
 audioPlayer.addEventListener("timeupdate", updatePlayhead);
 audioPlayer.addEventListener("seeked", updatePlayhead);
 
+function getSelectedMode() {
+  const checked = document.querySelector('input[name="analysis-mode"]:checked');
+  return checked ? checked.value : "fast";
+}
+
+async function pollJobUntilDone(jobId) {
+  while (true) {
+    const res = await fetch(`/api/jobs/${jobId}`);
+    const job = await res.json();
+    if (!res.ok) {
+      throw new Error(job.detail || "Lost track of analysis job.");
+    }
+    if (job.status === "done") {
+      return job.result;
+    }
+    if (job.status === "error") {
+      throw new Error(job.error || "Analysis failed.");
+    }
+    if (job.stage) {
+      setStatus(job.stage, "info");
+    }
+    await new Promise((resolve) => setTimeout(resolve, 750));
+  }
+}
+
+function handleAnalysisResult(data) {
+  renderAnalysis(data);
+  const lastEnd = data.chords && data.chords.length ? data.chords[data.chords.length - 1].end : 0;
+  if (data.duration > 5 && lastEnd < data.duration - 3.0) {
+    setStatus(
+      `Analysis stopped early at ${formatTime(lastEnd)} of ${formatTime(data.duration)}. Try converting the file to WAV and re-uploading.`,
+      "error"
+    );
+  } else if (data.beat_engine === "librosa-fallback" && data.beat_engine_note) {
+    setStatus(
+      `Analyzed "${data.title}" (${data.key}, ${data.tempo} BPM) using librosa beat fallback. ${data.beat_engine_note}`,
+      "info"
+    );
+  } else {
+    setStatus(`Analyzed "${data.title}" (${data.key}, ${data.tempo} BPM).`, "success");
+  }
+}
+
 uploadForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const file = audioFileInput.files[0];
@@ -344,27 +392,26 @@ uploadForm.addEventListener("submit", async (event) => {
     return;
   }
 
+  const mode = getSelectedMode();
   clearStatus();
-  setLoading(true, `Analyzing "${file.name}"...`);
+  setLoading(
+    true,
+    mode === "accurate"
+      ? `Uploading "${file.name}" for Accurate analysis (~5–11 min on CPU)...`
+      : `Uploading "${file.name}" for Fast analysis...`
+  );
 
   try {
     const formData = new FormData();
     formData.append("file", file);
-    const res = await fetch("/api/analyze", { method: "POST", body: formData });
-    const data = await res.json();
+    formData.append("mode", mode);
+    const res = await fetch("/api/jobs/analyze", { method: "POST", body: formData });
+    const startData = await res.json();
     if (!res.ok) {
-      throw new Error(data.detail || "Could not analyze this audio file.");
+      throw new Error(startData.detail || "Could not start analysis.");
     }
-    renderAnalysis(data);
-    const lastEnd = data.chords && data.chords.length ? data.chords[data.chords.length - 1].end : 0;
-    if (data.duration > 5 && lastEnd < data.duration - 3.0) {
-      setStatus(
-        `Analysis stopped early at ${formatTime(lastEnd)} of ${formatTime(data.duration)}. Try converting the file to WAV and re-uploading.`,
-        "error"
-      );
-    } else {
-      setStatus(`Analyzed "${data.title}" (${data.key}, ${data.tempo} BPM).`, "success");
-    }
+    const data = await pollJobUntilDone(startData.job_id);
+    handleAnalysisResult(data);
   } catch (err) {
     setStatus(err.message || "Upload failed. Check the file and try again.", "error");
   } finally {
@@ -380,29 +427,22 @@ urlForm.addEventListener("submit", async (event) => {
     return;
   }
 
+  const mode = getSelectedMode();
   clearStatus();
-  setLoading(true, "Downloading audio from YouTube and analyzing...");
+  setLoading(true, `Starting YouTube download (${mode} mode)...`);
 
   try {
-    const res = await fetch("/api/analyze-url", {
+    const res = await fetch("/api/jobs/analyze-url", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url }),
+      body: JSON.stringify({ url, mode }),
     });
-    const data = await res.json();
+    const startData = await res.json();
     if (!res.ok) {
-      throw new Error(data.detail || "Could not analyze this YouTube link.");
+      throw new Error(startData.detail || "Could not start YouTube analysis.");
     }
-    renderAnalysis(data);
-    const lastEnd = data.chords && data.chords.length ? data.chords[data.chords.length - 1].end : 0;
-    if (data.duration > 5 && lastEnd < data.duration - 3.0) {
-      setStatus(
-        `Analysis stopped early at ${formatTime(lastEnd)} of ${formatTime(data.duration)}. Try converting the file to WAV and re-uploading.`,
-        "error"
-      );
-    } else {
-      setStatus(`Analyzed "${data.title}" (${data.key}, ${data.tempo} BPM).`, "success");
-    }
+    const data = await pollJobUntilDone(startData.job_id);
+    handleAnalysisResult(data);
   } catch (err) {
     setStatus(err.message || "YouTube analysis failed. Check the link and try again.", "error");
   } finally {
