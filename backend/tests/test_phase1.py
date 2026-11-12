@@ -46,7 +46,7 @@ def _synth_chord_progression(out_path: Path, bpm: float = 100.0) -> Path:
 
 def test_phase1_analyze_synthetic(tmp_path: Path) -> None:
     wav_path = _synth_chord_progression(tmp_path / "cgamf_100bpm.wav", bpm=100.0)
-    result = analyze_audio(wav_path)
+    result = analyze_audio(wav_path, use_phase2=False, use_cache=False)
 
     assert result["pipeline"] == "phase1-librosa"
     assert 90.0 <= result["tempo"] <= 110.0
@@ -123,7 +123,7 @@ def test_phase1_long_track_with_drums_and_7ths(tmp_path: Path) -> None:
     wav_path = tmp_path / "long_drums_7ths.wav"
     sf.write(str(wav_path), audio, sr)
 
-    result = analyze_audio(wav_path)
+    result = analyze_audio(wav_path, use_phase2=False, use_cache=False)
     duration = result["duration"]
     assert duration >= 90.0
     assert result["chords"][-1]["end"] >= duration - 0.1
