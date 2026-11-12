@@ -18,11 +18,16 @@ const metaDurationEl = document.getElementById("meta-duration");
 const chartSubtitle = document.getElementById("chart-subtitle");
 const chartEmpty = document.getElementById("chart-empty");
 const leadSheetEl = document.getElementById("lead-sheet");
+const chartToolbar = document.getElementById("chart-toolbar");
+const editModeBtn = document.getElementById("edit-mode-btn");
+const exportJsonBtn = document.getElementById("export-json-btn");
+const exportTxtBtn = document.getElementById("export-txt-btn");
 
 let currentAnalysis = null;
 let beatNodes = [];
 let barNodes = [];
 let rafId = null;
+let isEditMode = false;
 
 function formatTime(seconds) {
   const s = Math.max(0, Math.floor(seconds));
@@ -74,8 +79,9 @@ function renderAnalysis(data) {
   const lastChord = chords.length > 0 ? chords[chords.length - 1] : null;
   const endsSummary = lastChord ? ` · Ends on ${lastChord.chord} (${formatTime(lastChord.end)})` : "";
 
-  chartSubtitle.textContent = `${totalBars} bars · ${beatChords.length} beats${endsSummary} · Click any beat to jump`;
+  chartSubtitle.textContent = `${totalBars} bars · ${beatChords.length} beats${endsSummary} · Click any beat to ${isEditMode ? "edit" : "jump"}`;
   chartEmpty.hidden = true;
+  chartToolbar.hidden = false;
   leadSheetEl.hidden = false;
   leadSheetEl.innerHTML = "";
 
@@ -120,6 +126,9 @@ function renderAnalysis(data) {
       if (beat.low_confidence) {
         cell.classList.add("is-low");
       }
+      if (beat.edited) {
+        cell.classList.add("is-edited");
+      }
 
       cell.setAttribute(
         "aria-label",
@@ -127,10 +136,14 @@ function renderAnalysis(data) {
       );
       cell.innerHTML = `
         <span class="beat-chord ${isRepeat ? "is-repeat" : ""}">${isRepeat ? "·" : beat.chord}</span>
-        <span class="beat-conf">${confPct}%${beat.low_confidence ? " ?" : ""}</span>
+        <span class="beat-conf">${beat.edited ? "edited" : `${confPct}%${beat.low_confidence ? " ?" : ""}`}</span>
       `;
 
       cell.addEventListener("click", () => {
+        if (isEditMode) {
+          openBeatEditor(cell, beat);
+          return;
+        }
         audioPlayer.currentTime = beat.start;
         if (audioPlayer.paused) {
           audioPlayer.play().catch(() => {});
@@ -147,6 +160,132 @@ function renderAnalysis(data) {
     leadSheetEl.appendChild(barCard);
   }
 }
+
+function rebuildChordsFromBeats() {
+  if (!currentAnalysis || !currentAnalysis.beat_chords) return;
+  const merged = [];
+  for (const item of currentAnalysis.beat_chords) {
+    const prev = merged[merged.length - 1];
+    if (prev && prev.chord === item.chord) {
+      prev.end = item.end;
+      prev.beat_end = item.beat_index;
+      prev._confs.push(item.confidence);
+      const avg = prev._confs.reduce((a, b) => a + b, 0) / prev._confs.length;
+      prev.confidence = Number(avg.toFixed(3));
+      prev.low_confidence = prev.confidence < 0.55;
+    } else {
+      merged.push({
+        start: item.start,
+        end: item.end,
+        beat_start: item.beat_index,
+        beat_end: item.beat_index,
+        chord: item.chord,
+        confidence: item.confidence,
+        low_confidence: item.low_confidence,
+        _confs: [item.confidence],
+      });
+    }
+  }
+  for (const seg of merged) {
+    delete seg._confs;
+  }
+  currentAnalysis.chords = merged;
+}
+
+function openBeatEditor(cell, beat) {
+  if (cell.querySelector("input")) return;
+  const input = document.createElement("input");
+  input.type = "text";
+  input.className = "beat-edit-input";
+  input.value = beat.chord;
+  input.setAttribute("aria-label", `Edit chord for beat ${beat.beat_index + 1}`);
+
+  cell.innerHTML = "";
+  cell.appendChild(input);
+  input.focus();
+  input.select();
+
+  const commit = () => {
+    const next = input.value.trim();
+    if (next && next !== beat.chord) {
+      beat.chord = next;
+      beat.confidence = 1.0;
+      beat.low_confidence = false;
+      beat.edited = true;
+      rebuildChordsFromBeats();
+    }
+    renderAnalysis(currentAnalysis);
+  };
+
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      commit();
+    } else if (e.key === "Escape") {
+      renderAnalysis(currentAnalysis);
+    }
+  });
+  input.addEventListener("blur", commit, { once: true });
+}
+
+function downloadTextFile(filename, content, mimeType) {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function formatChordSheetText(data) {
+  const lines = [
+    `${data.title || "Untitled"}`,
+    `Key: ${data.key || "Unknown"} | Tempo: ${data.tempo || "—"} BPM | Time: ${data.time_signature || "4/4"}`,
+    "",
+  ];
+  const beats = data.beat_chords || [];
+  const beatsPerBar = 4;
+  const totalBars = Math.ceil(beats.length / beatsPerBar);
+  let row = [];
+
+  for (let b = 0; b < totalBars; b += 1) {
+    const barBeats = beats.slice(b * beatsPerBar, (b + 1) * beatsPerBar);
+    const tokens = barBeats.map((item, idx) => {
+      const prev = item.beat_index > 0 ? beats[item.beat_index - 1] : null;
+      return prev && prev.chord === item.chord && idx > 0 ? "/" : item.chord;
+    });
+    row.push(`| ${tokens.join(" ")} `);
+    if (row.length === 4 || b === totalBars - 1) {
+      lines.push(row.join("") + "|");
+      row = [];
+    }
+  }
+  return lines.join("\n");
+}
+
+editModeBtn.addEventListener("click", () => {
+  isEditMode = !isEditMode;
+  editModeBtn.setAttribute("aria-pressed", String(isEditMode));
+  editModeBtn.textContent = isEditMode ? "Done editing" : "Edit chords";
+  if (currentAnalysis) {
+    renderAnalysis(currentAnalysis);
+  }
+});
+
+exportJsonBtn.addEventListener("click", () => {
+  if (!currentAnalysis) return;
+  const slug = (currentAnalysis.title || "chordlens").replace(/[^a-z0-9-_]+/gi, "-").toLowerCase();
+  downloadTextFile(`${slug}-chords.json`, JSON.stringify(currentAnalysis, null, 2), "application/json");
+});
+
+exportTxtBtn.addEventListener("click", () => {
+  if (!currentAnalysis) return;
+  const slug = (currentAnalysis.title || "chordlens").replace(/[^a-z0-9-_]+/gi, "-").toLowerCase();
+  downloadTextFile(`${slug}-chord-sheet.txt`, formatChordSheetText(currentAnalysis), "text/plain");
+});
 
 function updatePlayhead() {
   if (!currentAnalysis || !currentAnalysis.beat_chords) return;

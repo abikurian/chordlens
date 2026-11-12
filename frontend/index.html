@@ -106,15 +106,28 @@
             Upload a track or paste a YouTube URL to view bars and chords.
           </p>
         </div>
-        <div class="chart-legend" aria-label="Chart legend">
-          <span class="legend-item">
-            <span class="legend-swatch swatch-active" aria-hidden="true"></span>
-            Playing
-          </span>
-          <span class="legend-item">
-            <span class="legend-swatch swatch-low" aria-hidden="true"></span>
-            Low confidence (&lt;55%)
-          </span>
+        <div class="chart-actions">
+          <div class="chart-legend" aria-label="Chart legend">
+            <span class="legend-item">
+              <span class="legend-swatch swatch-active" aria-hidden="true"></span>
+              Playing
+            </span>
+            <span class="legend-item">
+              <span class="legend-swatch swatch-low" aria-hidden="true"></span>
+              Low confidence (&lt;55%)
+            </span>
+          </div>
+          <div id="chart-toolbar" class="chart-toolbar" hidden>
+            <button type="button" id="edit-mode-btn" class="btn btn-secondary btn-sm" aria-pressed="false">
+              Edit chords
+            </button>
+            <button type="button" id="export-json-btn" class="btn btn-secondary btn-sm">
+              Export JSON
+            </button>
+            <button type="button" id="export-txt-btn" class="btn btn-secondary btn-sm">
+              Export chord sheet
+            </button>
+          </div>
         </div>
       </div>
 
