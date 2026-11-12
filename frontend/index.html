@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/styles.css?v=20261112i" />
+  <link rel="stylesheet" href="/styles.css?v=20261112j" />
 </head>
 <body>
   <header class="topbar">
@@ -232,6 +232,23 @@
           <button type="button" id="np-loop-btn" class="btn btn-secondary btn-sm" aria-pressed="false">Loop 4 bars</button>
           <button type="button" id="follow-mode-btn" class="btn btn-secondary btn-sm" aria-pressed="false">Follow mode</button>
         </div>
+        <div class="settings-control-row">
+          <span class="settings-label">Timing nudge</span>
+          <div class="transpose-controls" role="group" aria-label="Timing nudge">
+            <button type="button" id="nudge-down-btn" class="btn btn-secondary btn-sm btn-icon" aria-label="Nudge timing 10 milliseconds earlier">-</button>
+            <span id="nudge-val" class="transpose-val">0 ms</span>
+            <button type="button" id="nudge-up-btn" class="btn btn-secondary btn-sm btn-icon" aria-label="Nudge timing 10 milliseconds later">+</button>
+          </div>
+        </div>
+        <div class="settings-control-row">
+          <label for="early-beats-select" class="settings-label">Show changes early</label>
+          <select id="early-beats-select" class="capo-select-inline">
+            <option value="0">On the beat</option>
+            <option value="1" selected>1 beat early</option>
+            <option value="2">2 beats early</option>
+            <option value="3">3 beats early</option>
+          </select>
+        </div>
       </section>
 
       <section class="settings-group" aria-labelledby="settings-more-heading">
@@ -247,7 +264,7 @@
     </div>
   </aside>
 
-  <script src="/chordShapes.js?v=20261112i"></script>
-  <script src="/app.js?v=20261112i"></script>
+  <script src="/chordShapes.js?v=20261112j"></script>
+  <script src="/app.js?v=20261112j"></script>
 </body>
 </html>

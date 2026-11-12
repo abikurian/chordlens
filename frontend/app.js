@@ -71,6 +71,10 @@ const applyCapoBtn = document.getElementById("apply-capo-btn");
 const speedBtns = Array.from(document.querySelectorAll(".speed-btn"));
 const npLoopBtn = document.getElementById("np-loop-btn");
 const followModeBtn = document.getElementById("follow-mode-btn");
+const nudgeDownBtn = document.getElementById("nudge-down-btn");
+const nudgeValEl = document.getElementById("nudge-val");
+const nudgeUpBtn = document.getElementById("nudge-up-btn");
+const earlyBeatsSelect = document.getElementById("early-beats-select");
 const moreDetailBtn = document.getElementById("more-detail-btn");
 const editModeBtn = document.getElementById("edit-mode-btn");
 const newSongBtn = document.getElementById("new-song-btn");
@@ -104,6 +108,17 @@ let showMoreDetail = false;
 let autoScrollEnabled = true;
 let isProgrammaticScroll = false;
 let lastActiveBarIdx = -1;
+let lastActiveBeatIdx = -1;
+let timingNudgeMs = (() => {
+  const saved = Number(localStorage.getItem("chordlens_timing_nudge_ms"));
+  return Number.isFinite(saved) ? Math.max(-300, Math.min(300, Math.round(saved / 10) * 10)) : 0;
+})();
+let earlyBeats = (() => {
+  const raw = localStorage.getItem("chordlens_early_beats");
+  if (raw === null) return 1;
+  const saved = Number(raw);
+  return Number.isFinite(saved) ? Math.max(0, Math.min(3, Math.round(saved))) : 1;
+})();
 let transposeSemitones = 0; // -11 .. +11
 let capoFret = 0; // 0 .. 12
 let showShapesMode = true; // true = shapes to play, false = sounding chords
@@ -245,8 +260,20 @@ function updateSettingsDot() {
     loopRange !== null ||
     followMode ||
     showMoreDetail ||
-    isEditMode;
+    isEditMode ||
+    timingNudgeMs !== 0 ||
+    earlyBeats !== 1;
   settingsDot.hidden = !nonDefault;
+}
+
+function updateTimingControlsUI() {
+  if (nudgeValEl) {
+    nudgeValEl.textContent = timingNudgeMs > 0 ? `+${timingNudgeMs} ms` : `${timingNudgeMs} ms`;
+  }
+  if (earlyBeatsSelect) {
+    earlyBeatsSelect.value = String(earlyBeats);
+  }
+  updateSettingsDot();
 }
 
 function openSettingsDrawer() {
@@ -711,32 +738,59 @@ function jumpByBars(delta) {
   }
 }
 
+function findActiveBeatIndex(beats, t) {
+  const n = beats.length;
+  if (n === 0 || t < beats[0].start) return -1;
+  if (t >= beats[n - 1].start) return n - 1;
+
+  // Monotonic forward fast-path during normal playback
+  if (lastActiveBeatIdx >= 0 && lastActiveBeatIdx < n) {
+    const cur = beats[lastActiveBeatIdx];
+    if (t >= cur.start && t < cur.end) {
+      return lastActiveBeatIdx;
+    }
+    if (lastActiveBeatIdx + 1 < n) {
+      const nxt = beats[lastActiveBeatIdx + 1];
+      if (t >= nxt.start && t < nxt.end) {
+        return lastActiveBeatIdx + 1;
+      }
+    }
+  }
+
+  // Binary search over beat start times
+  let lo = 0;
+  let hi = n - 1;
+  let ans = 0;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (beats[mid].start <= t) {
+      ans = mid;
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
+    }
+  }
+  return ans;
+}
+
 function updatePlayhead() {
   if (!currentAnalysis || !currentAnalysis.beat_chords) return;
-  const t = audioPlayer.currentTime;
-  if (loopRange && !audioPlayer.paused && t >= loopRange.end) {
+  const rawT = audioPlayer.currentTime;
+  if (loopRange && !audioPlayer.paused && rawT >= loopRange.end) {
     audioPlayer.currentTime = loopRange.start;
   }
 
-  const curT = audioPlayer.currentTime;
+  const curT = Math.max(0, audioPlayer.currentTime + timingNudgeMs / 1000);
   const dur = audioPlayer.duration || currentAnalysis.duration || 0;
-  npTimeReadout.textContent = `${formatTime(curT)} / ${formatTime(dur)}`;
+  npTimeReadout.textContent = `${formatTime(audioPlayer.currentTime)} / ${formatTime(dur)}`;
   npPlayBtn.textContent = audioPlayer.paused ? "Play" : "Pause";
   if (!isSeekingSlider && dur > 0) {
-    npSeekSlider.value = String(Math.round((curT / dur) * 1000));
+    npSeekSlider.value = String(Math.round((audioPlayer.currentTime / dur) * 1000));
   }
 
   const beats = currentAnalysis.beat_chords;
-  let activeBeatIdx = -1;
-  for (let i = 0; i < beats.length; i += 1) {
-    if (curT >= beats[i].start && curT < beats[i].end) {
-      activeBeatIdx = i;
-      break;
-    }
-  }
-  if (activeBeatIdx === -1 && beats.length > 0 && curT >= beats[beats.length - 1].start) {
-    activeBeatIdx = beats.length - 1;
-  }
+  const activeBeatIdx = findActiveBeatIndex(beats, curT);
+  lastActiveBeatIdx = activeBeatIdx;
 
   for (const node of beatNodes) {
     if (node) node.cell.classList.remove("active");
@@ -1220,8 +1274,12 @@ document.addEventListener("keydown", (event) => {
 });
 
 function startPlayheadLoop() {
-  if (rafId !== null) return;
+  if (rafId !== null || document.hidden) return;
   const tick = () => {
+    if (document.hidden) {
+      rafId = null;
+      return;
+    }
     updatePlayhead();
     if (!audioPlayer.paused && !audioPlayer.ended) {
       rafId = requestAnimationFrame(tick);
@@ -1232,10 +1290,49 @@ function startPlayheadLoop() {
   rafId = requestAnimationFrame(tick);
 }
 
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) {
+    if (rafId !== null) {
+      cancelAnimationFrame(rafId);
+      rafId = null;
+    }
+  } else if (!audioPlayer.paused && !audioPlayer.ended) {
+    startPlayheadLoop();
+  }
+});
+
 audioPlayer.addEventListener("play", startPlayheadLoop);
 audioPlayer.addEventListener("pause", updatePlayhead);
-audioPlayer.addEventListener("timeupdate", updatePlayhead);
 audioPlayer.addEventListener("seeked", updatePlayhead);
+
+if (nudgeDownBtn) {
+  nudgeDownBtn.addEventListener("click", () => {
+    timingNudgeMs = Math.max(-300, timingNudgeMs - 10);
+    localStorage.setItem("chordlens_timing_nudge_ms", String(timingNudgeMs));
+    updateTimingControlsUI();
+    updatePlayhead();
+  });
+}
+
+if (nudgeUpBtn) {
+  nudgeUpBtn.addEventListener("click", () => {
+    timingNudgeMs = Math.min(300, timingNudgeMs + 10);
+    localStorage.setItem("chordlens_timing_nudge_ms", String(timingNudgeMs));
+    updateTimingControlsUI();
+    updatePlayhead();
+  });
+}
+
+if (earlyBeatsSelect) {
+  earlyBeatsSelect.addEventListener("change", () => {
+    earlyBeats = Math.max(0, Math.min(3, Number(earlyBeatsSelect.value) || 0));
+    localStorage.setItem("chordlens_early_beats", String(earlyBeats));
+    updateTimingControlsUI();
+    updatePlayhead();
+  });
+}
+
+updateTimingControlsUI();
 
 function getSelectedMode() {
   const checked = document.querySelector('input[name="analysis-mode"]:checked');
