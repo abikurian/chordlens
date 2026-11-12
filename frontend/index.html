@@ -144,6 +144,12 @@
             </span>
           </div>
           <div id="chart-toolbar" class="chart-toolbar" hidden>
+            <button type="button" id="chord-detail-btn" class="btn btn-secondary btn-sm" aria-pressed="false">
+              Chords: Simple
+            </button>
+            <button type="button" id="more-detail-btn" class="btn btn-secondary btn-sm" aria-pressed="false">
+              More detail
+            </button>
             <button type="button" id="edit-mode-btn" class="btn btn-secondary btn-sm" aria-pressed="false">
               Edit chords
             </button>
@@ -155,6 +161,21 @@
             </button>
           </div>
         </div>
+      </div>
+
+      <div id="now-playing-strip" class="now-playing-strip" hidden>
+        <div class="now-playing-current">
+          <span class="now-playing-label">Now playing</span>
+          <strong id="now-playing-chord" class="now-playing-chord">—</strong>
+        </div>
+        <div class="now-playing-next">
+          <span class="now-playing-label">Next</span>
+          <strong id="now-playing-next-chord" class="now-playing-next-chord">—</strong>
+          <span id="now-playing-countdown" class="now-playing-countdown"></span>
+        </div>
+        <button type="button" id="jump-to-bar-btn" class="btn btn-secondary btn-sm" hidden>
+          Jump to current bar
+        </button>
       </div>
 
       <div id="chart-empty" class="chart-empty">

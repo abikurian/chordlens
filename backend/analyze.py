@@ -18,7 +18,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 CACHE_DIR = BASE_DIR / "cache"
 BEAT_THIS_CKPT_DIR = BASE_DIR / "models" / "beat_this"
 BEAT_THIS_CKPT_PATH = BEAT_THIS_CKPT_DIR / "final0.ckpt"
-BEAT_THIS_CKPT_URL = "https://cloud.cp.jku.at/public.php/dav/files/7ik4RrBKTS273gp/final0.ckpt"
+BEAT_THIS_CKPT_URL = "https://cloud.cp.jku.at/index.php/s/7ik4RrBKTS273gp"
 CACHE_VERSION = "v3"
 
 NOTE_NAMES = ["C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"]
@@ -251,53 +251,25 @@ def _track_beats_librosa(
 
 
 def _ensure_beat_this_checkpoint(progress_cb=None) -> Path:
-    """Return local beat_this checkpoint path, downloading with Range resume if needed."""
+    """Return local beat_this checkpoint path if present; otherwise instruct manual download."""
     import torch
 
-    if BEAT_THIS_CKPT_PATH.exists() and BEAT_THIS_CKPT_PATH.stat().st_size > 10_000_000:
+    if BEAT_THIS_CKPT_PATH.is_file() and BEAT_THIS_CKPT_PATH.stat().st_size > 0:
         return BEAT_THIS_CKPT_PATH
 
     hub_ckpt = Path(torch.hub.get_dir()) / "checkpoints" / "beat_this-final0.ckpt"
-    if hub_ckpt.exists() and hub_ckpt.stat().st_size > 10_000_000:
+    if hub_ckpt.is_file() and hub_ckpt.stat().st_size > 0:
         return hub_ckpt
 
-    import httpx
-
-    BEAT_THIS_CKPT_DIR.mkdir(parents=True, exist_ok=True)
-    part_path = BEAT_THIS_CKPT_DIR / "final0.ckpt.part"
-
-    if progress_cb:
-        progress_cb("Downloading beat_this checkpoint (one-time setup, ~77 MB)...")
-
-    last_err: Exception | None = None
-    for attempt in range(3):
-        existing_bytes = part_path.stat().st_size if part_path.exists() else 0
-        headers = {"Range": f"bytes={existing_bytes}-"} if existing_bytes > 0 else {}
-        try:
-            with httpx.stream(
-                "GET",
-                BEAT_THIS_CKPT_URL,
-                headers=headers,
-                timeout=httpx.Timeout(connect=20.0, read=120.0, write=30.0, pool=30.0),
-                follow_redirects=True,
-            ) as resp:
-                if resp.status_code not in (200, 206):
-                    raise RuntimeError(f"HTTP {resp.status_code} while downloading beat_this checkpoint.")
-                mode = "ab" if resp.status_code == 206 and existing_bytes > 0 else "wb"
-                with part_path.open(mode) as f:
-                    for chunk in resp.iter_bytes(chunk_size=1024 * 256):
-                        f.write(chunk)
-            if part_path.stat().st_size > 10_000_000:
-                part_path.replace(BEAT_THIS_CKPT_PATH)
-                return BEAT_THIS_CKPT_PATH
-        except Exception as exc:
-            last_err = exc
-            logger.warning("beat_this checkpoint download attempt %d failed: %s", attempt + 1, exc)
-
-    raise RuntimeError(
-        f"Could not download beat_this checkpoint ({last_err}). "
-        f"To install manually, download {BEAT_THIS_CKPT_URL} and save it to {BEAT_THIS_CKPT_PATH}"
+    msg = (
+        f"beat_this checkpoint not found. Download it manually from "
+        f"{BEAT_THIS_CKPT_URL} and save it in folder '{BEAT_THIS_CKPT_DIR}' as 'final0.ckpt' "
+        f"(full path: {BEAT_THIS_CKPT_PATH})."
     )
+    print(msg)
+    if progress_cb:
+        progress_cb(msg)
+    raise FileNotFoundError(msg)
 
 
 def _track_beats_beat_this(

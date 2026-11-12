@@ -21,9 +21,17 @@ const chartEmpty = document.getElementById("chart-empty");
 const sectionStripEl = document.getElementById("section-strip");
 const leadSheetEl = document.getElementById("lead-sheet");
 const chartToolbar = document.getElementById("chart-toolbar");
+const chordDetailBtn = document.getElementById("chord-detail-btn");
+const moreDetailBtn = document.getElementById("more-detail-btn");
 const editModeBtn = document.getElementById("edit-mode-btn");
 const exportJsonBtn = document.getElementById("export-json-btn");
 const exportTxtBtn = document.getElementById("export-txt-btn");
+
+const nowPlayingStrip = document.getElementById("now-playing-strip");
+const nowPlayingChordEl = document.getElementById("now-playing-chord");
+const nowPlayingNextChordEl = document.getElementById("now-playing-next-chord");
+const nowPlayingCountdownEl = document.getElementById("now-playing-countdown");
+const jumpToBarBtn = document.getElementById("jump-to-bar-btn");
 
 let currentAnalysis = null;
 let beatNodes = [];
@@ -31,6 +39,22 @@ let barNodes = [];
 let sectionNodes = [];
 let rafId = null;
 let isEditMode = false;
+let chordDetailMode = "simple"; // "simple" | "full"
+let showMoreDetail = false;
+let autoScrollEnabled = true;
+let isProgrammaticScroll = false;
+let lastActiveBarIdx = -1;
+
+function simplifyChord(chord) {
+  if (!chord || chord === "N") return chord || "N";
+  const match = chord.match(/^([A-G][#b]?)(m(?!aj)|dim|aug)?/);
+  if (!match) return chord;
+  return `${match[1]}${match[2] || ""}`;
+}
+
+function getDisplayedChord(rawChord) {
+  return chordDetailMode === "simple" ? simplifyChord(rawChord) : rawChord;
+}
 
 function formatTime(seconds) {
   const s = Math.max(0, Math.floor(seconds));
@@ -88,8 +112,10 @@ function renderAnalysis(data) {
   chartSubtitle.textContent = `${totalBars} bars · ${beatChords.length} beats${endsSummary} · Click any beat to ${isEditMode ? "edit" : "jump"}`;
   chartEmpty.hidden = true;
   chartToolbar.hidden = false;
+  nowPlayingStrip.hidden = beatChords.length === 0;
   leadSheetEl.hidden = false;
   leadSheetEl.innerHTML = "";
+  lastActiveBarIdx = -1;
 
   beatNodes = [];
   barNodes = [];
@@ -97,7 +123,7 @@ function renderAnalysis(data) {
 
   const sections = data.sections || [];
   sectionStripEl.innerHTML = "";
-  if (sections.length > 0) {
+  if (sections.length > 0 && showMoreDetail) {
     sectionStripEl.hidden = false;
     for (const sec of sections) {
       const btn = document.createElement("button");
@@ -152,8 +178,10 @@ function renderAnalysis(data) {
       }
 
       const prevBeat = beat.beat_index > 0 ? beatChords[beat.beat_index - 1] : null;
+      const shownChord = getDisplayedChord(beat.chord);
+      const prevShownChord = prevBeat ? getDisplayedChord(prevBeat.chord) : null;
       const isLastBeat = beat.beat_index === beatChords.length - 1;
-      const isRepeat = prevBeat && prevBeat.chord === beat.chord && offset > 0 && !isLastBeat;
+      const isRepeat = prevShownChord && prevShownChord === shownChord && offset > 0 && !isLastBeat;
       const confPct = Math.round((beat.confidence || 0) * 100);
 
       if (beat.low_confidence) {
@@ -165,12 +193,15 @@ function renderAnalysis(data) {
 
       cell.setAttribute(
         "aria-label",
-        `Bar ${barIdx + 1} beat ${offset + 1}, chord ${beat.chord}, model confidence ${confPct}%${beat.low_confidence ? ", low model confidence" : ""}`
+        `Bar ${barIdx + 1} beat ${offset + 1}, chord ${shownChord}, model confidence ${confPct}%${beat.low_confidence ? ", low model confidence" : ""}`
       );
       cell.title = `Model confidence: ${confPct}%`;
+      const detailHtml = showMoreDetail
+        ? `<span class="beat-conf">b${offset + 1} · ${beat.edited ? "edited" : `${confPct}%${beat.low_confidence ? " ?" : ""}`}</span>`
+        : "";
       cell.innerHTML = `
-        <span class="beat-chord ${isRepeat ? "is-repeat" : ""}">${isRepeat ? "·" : beat.chord}</span>
-        <span class="beat-conf">${beat.edited ? "edited" : `${confPct}%${beat.low_confidence ? " ?" : ""}`}</span>
+        <span class="beat-chord ${isRepeat ? "is-repeat" : ""}">${isRepeat ? "/" : shownChord}</span>
+        ${detailHtml}
       `;
 
       cell.addEventListener("click", () => {
@@ -303,7 +334,9 @@ function formatChordSheetText(data) {
     const barBeats = beats.slice(b * beatsPerBar, (b + 1) * beatsPerBar);
     const tokens = barBeats.map((item, idx) => {
       const prev = item.beat_index > 0 ? beats[item.beat_index - 1] : null;
-      return prev && prev.chord === item.chord && idx > 0 ? "/" : item.chord;
+      const shown = getDisplayedChord(item.chord);
+      const prevShown = prev ? getDisplayedChord(prev.chord) : null;
+      return prevShown && prevShown === shown && idx > 0 ? "/" : shown;
     });
     row.push(`| ${tokens.join(" ")} `);
     if (row.length === 4 || b === totalBars - 1) {
@@ -313,6 +346,34 @@ function formatChordSheetText(data) {
   }
   return lines.join("\n");
 }
+
+chordDetailBtn.addEventListener("click", () => {
+  chordDetailMode = chordDetailMode === "simple" ? "full" : "simple";
+  const isFull = chordDetailMode === "full";
+  chordDetailBtn.setAttribute("aria-pressed", String(isFull));
+  chordDetailBtn.textContent = isFull ? "Chords: Full" : "Chords: Simple";
+  if (currentAnalysis) {
+    renderAnalysis(currentAnalysis);
+    updatePlayhead();
+  }
+});
+
+moreDetailBtn.addEventListener("click", () => {
+  showMoreDetail = !showMoreDetail;
+  moreDetailBtn.setAttribute("aria-pressed", String(showMoreDetail));
+  if (currentAnalysis) {
+    renderAnalysis(currentAnalysis);
+    updatePlayhead();
+  }
+});
+
+jumpToBarBtn.addEventListener("click", () => {
+  autoScrollEnabled = true;
+  jumpToBarBtn.hidden = true;
+  if (lastActiveBarIdx >= 0 && barNodes[lastActiveBarIdx]) {
+    scrollBarIntoView(barNodes[lastActiveBarIdx]);
+  }
+});
 
 editModeBtn.addEventListener("click", () => {
   isEditMode = !isEditMode;
@@ -335,6 +396,23 @@ exportTxtBtn.addEventListener("click", () => {
   downloadTextFile(`${slug}-chord-sheet.txt`, formatChordSheetText(currentAnalysis), "text/plain");
 });
 
+function scrollBarIntoView(barEl) {
+  if (!barEl) return;
+  const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  isProgrammaticScroll = true;
+  barEl.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "center" });
+  window.setTimeout(() => {
+    isProgrammaticScroll = false;
+  }, 400);
+}
+
+window.addEventListener("scroll", () => {
+  if (!isProgrammaticScroll && !audioPlayer.paused && currentAnalysis) {
+    autoScrollEnabled = false;
+    jumpToBarBtn.hidden = false;
+  }
+}, { passive: true });
+
 function updatePlayhead() {
   if (!currentAnalysis || !currentAnalysis.beat_chords) return;
   const t = audioPlayer.currentTime;
@@ -354,16 +432,54 @@ function updatePlayhead() {
   for (const node of beatNodes) {
     if (node) node.cell.classList.remove("is-active");
   }
-  for (const bar of barNodes) {
-    if (bar) bar.classList.remove("is-active");
+  for (let bIdx = 0; bIdx < barNodes.length; bIdx += 1) {
+    if (barNodes[bIdx]) {
+      barNodes[bIdx].classList.remove("is-active", "is-played");
+    }
   }
 
   if (activeBeatIdx >= 0 && beatNodes[activeBeatIdx]) {
-    const { cell, barIdx } = beatNodes[activeBeatIdx];
+    const { cell, barIdx, beat } = beatNodes[activeBeatIdx];
     cell.classList.add("is-active");
     if (barNodes[barIdx]) {
       barNodes[barIdx].classList.add("is-active");
     }
+    for (let bIdx = 0; bIdx < barIdx; bIdx += 1) {
+      if (barNodes[bIdx]) barNodes[bIdx].classList.add("is-played");
+    }
+
+    // Update "Now playing" strip
+    const curShown = getDisplayedChord(beat.chord);
+    nowPlayingChordEl.textContent = curShown;
+
+    let nextChord = null;
+    let beatsUntil = 0;
+    for (let j = activeBeatIdx + 1; j < beats.length; j += 1) {
+      const cand = getDisplayedChord(beats[j].chord);
+      if (cand !== curShown) {
+        nextChord = cand;
+        beatsUntil = j - activeBeatIdx;
+        break;
+      }
+    }
+    if (nextChord) {
+      nowPlayingNextChordEl.textContent = nextChord;
+      nowPlayingCountdownEl.textContent = `in ${beatsUntil} beat${beatsUntil === 1 ? "" : "s"}`;
+    } else {
+      nowPlayingNextChordEl.textContent = "End";
+      nowPlayingCountdownEl.textContent = "";
+    }
+
+    if (barIdx !== lastActiveBarIdx) {
+      lastActiveBarIdx = barIdx;
+      if (autoScrollEnabled && !audioPlayer.paused && barNodes[barIdx]) {
+        scrollBarIntoView(barNodes[barIdx]);
+      }
+    }
+  } else if (beats.length > 0) {
+    nowPlayingChordEl.textContent = getDisplayedChord(beats[0].chord);
+    nowPlayingNextChordEl.textContent = "—";
+    nowPlayingCountdownEl.textContent = "";
   }
 
   for (const node of sectionNodes) {
@@ -371,6 +487,32 @@ function updatePlayhead() {
     node.btn.classList.toggle("is-active", active);
   }
 }
+
+document.addEventListener("keydown", (event) => {
+  const tag = (event.target && event.target.tagName) ? event.target.tagName.toLowerCase() : "";
+  if (tag === "input" || tag === "textarea" || tag === "select") return;
+  if (!currentAnalysis || !currentAnalysis.beat_chords || currentAnalysis.beat_chords.length === 0) return;
+
+  if (event.code === "Space" && tag !== "button") {
+    event.preventDefault();
+    if (audioPlayer.paused) {
+      audioPlayer.play().catch(() => {});
+    } else {
+      audioPlayer.pause();
+    }
+  } else if (event.code === "ArrowLeft" || event.code === "ArrowRight") {
+    event.preventDefault();
+    const step = event.code === "ArrowRight" ? 1 : -1;
+    const totalBars = barNodes.length;
+    const targetBar = Math.max(0, Math.min(totalBars - 1, (lastActiveBarIdx < 0 ? 0 : lastActiveBarIdx) + step));
+    const targetBeat = currentAnalysis.beat_chords[targetBar * 4];
+    if (targetBeat) {
+      audioPlayer.currentTime = targetBeat.start;
+      updatePlayhead();
+      scrollBarIntoView(barNodes[targetBar]);
+    }
+  }
+});
 
 function startPlayheadLoop() {
   if (rafId !== null) return;

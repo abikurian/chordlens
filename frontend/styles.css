@@ -498,6 +498,61 @@ body {
   font-size: 0.95rem;
 }
 
+/* Now playing strip */
+.now-playing-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: 0.9rem 1.1rem;
+  margin-bottom: 1rem;
+  background: var(--bg);
+  border: 1px solid var(--rule);
+  border-left: 4px solid var(--accent);
+  border-radius: 6px;
+}
+
+.now-playing-current,
+.now-playing-next {
+  display: flex;
+  align-items: baseline;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
+.now-playing-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-muted);
+}
+
+.now-playing-chord {
+  font-family: var(--font-display);
+  font-size: 2.35rem;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: var(--ink);
+}
+
+.now-playing-next-chord {
+  font-family: var(--font-display);
+  font-size: 1.45rem;
+  font-weight: 600;
+  line-height: 1.1;
+  color: var(--ink);
+}
+
+.now-playing-countdown {
+  font-size: 0.9rem;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-muted);
+}
+
 /* Estimated section bands */
 .section-strip {
   display: flex;
@@ -577,8 +632,11 @@ body {
 }
 
 .bar-card.is-active {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent);
+  border: 2px solid var(--accent);
+}
+
+.bar-card.is-played {
+  opacity: 0.52;
 }
 
 .bar-head {
@@ -595,8 +653,8 @@ body {
 }
 
 .bar-card.is-active .bar-head {
-  background: var(--accent-soft);
-  color: var(--accent);
+  background: var(--accent);
+  color: #ffffff;
 }
 
 .bar-beats {
@@ -609,8 +667,8 @@ body {
   border: 0;
   border-right: 1px solid var(--rule);
   background: transparent;
-  padding: 0.65rem 0.3rem;
-  min-height: 62px;
+  padding: 0.75rem 0.25rem;
+  min-height: 64px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -631,25 +689,31 @@ body {
 }
 
 .beat-cell.is-active {
-  background: var(--accent-soft);
+  background: var(--accent);
+  color: #ffffff;
 }
 
 .beat-cell.is-low {
-  background: var(--warn-bg);
   border-bottom: 2px dashed var(--warn-border);
 }
 
 .beat-chord {
   font-family: var(--font-display);
-  font-size: 1.05rem;
-  font-weight: 600;
+  font-size: 1.2rem;
+  font-weight: 700;
   line-height: 1.15;
   letter-spacing: -0.01em;
 }
 
 .beat-chord.is-repeat {
   color: var(--ink-muted);
-  font-weight: 500;
+  font-weight: 400;
+}
+
+.beat-cell.is-active .beat-chord,
+.beat-cell.is-active .beat-chord.is-repeat,
+.beat-cell.is-active .beat-conf {
+  color: #ffffff;
 }
 
 .beat-conf {
