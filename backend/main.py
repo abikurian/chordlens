@@ -16,16 +16,21 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from backend.analyze import analyze_audio
-from backend.ffmpeg_utils import friendly_error_message, log_startup_toolchain
+from backend.ffmpeg_utils import friendly_error_message, get_system_status, log_startup_toolchain
+from backend.paths import (
+    CACHE_DIR,
+    CACHE_YT_DIR,
+    DATA_DIR,
+    LOGS_DIR,
+    MODELS_DIR,
+    UPLOAD_DIR,
+    clear_app_cache,
+    get_frontend_dir,
+)
 from backend.version import get_version
 from backend.youtube import download_youtube_audio, normalize_youtube_url
 
-BASE_DIR = Path(__file__).resolve().parent.parent
-FRONTEND_DIR = BASE_DIR / "frontend"
-UPLOAD_DIR = BASE_DIR / "tmp" / "uploads"
-CACHE_YT_DIR = BASE_DIR / "cache" / "youtube"
-UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-CACHE_YT_DIR.mkdir(parents=True, exist_ok=True)
+FRONTEND_DIR = get_frontend_dir()
 
 ALLOWED_EXTENSIONS = {".mp3", ".wav", ".m4a", ".flac"}
 EXECUTOR = ThreadPoolExecutor(max_workers=2)
@@ -101,8 +106,54 @@ def favicon() -> FileResponse:
 
 
 @app.get("/api/health")
-def health() -> dict[str, str]:
-    return {"status": "ok", "version": get_version()}
+def health() -> dict[str, Any]:
+    status = get_system_status()
+    models_present = bool(list(MODELS_DIR.glob("*.pt")) or list(MODELS_DIR.glob("*.pth")))
+    return {
+        "status": "ok",
+        "version": get_version(),
+        "ffmpeg": "OK" if status.get("ffmpeg_ok") else "MISSING",
+        "yt_dlp": status.get("ytdlp_version") or "unknown",
+        "models": "present" if models_present else "on-demand",
+        "data_dir": str(DATA_DIR),
+    }
+
+
+@app.post("/api/system/open-data-dir")
+def open_data_dir() -> dict[str, str]:
+    import subprocess
+    try:
+        if os.name == "nt":
+            os.startfile(str(DATA_DIR))
+        else:
+            subprocess.run(["xdg-open", str(DATA_DIR)], check=False)
+        return {"status": "ok", "detail": f"Opened {DATA_DIR}"}
+    except Exception as exc:
+        return {"status": "error", "detail": str(exc)}
+
+
+@app.post("/api/system/clear-cache")
+def clear_cache_endpoint() -> dict[str, Any]:
+    count = clear_app_cache()
+    return {"status": "ok", "detail": f"Cleared {count} cached file(s)"}
+
+
+@app.post("/api/system/update-ytdlp")
+def update_ytdlp_endpoint() -> dict[str, Any]:
+    import subprocess
+    try:
+        proc = subprocess.run(
+            [sys.executable, "-m", "pip", "install", "--upgrade", "yt-dlp", "--target", str(DATA_DIR / "packages")],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=120,
+        )
+        if proc.returncode == 0:
+            return {"status": "ok", "detail": "yt-dlp updated successfully"}
+        return {"status": "error", "detail": proc.stderr or proc.stdout or "Update failed"}
+    except Exception as exc:
+        return {"status": "error", "detail": str(exc)}
 
 
 @app.post("/api/analyze")
