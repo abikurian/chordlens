@@ -50,3 +50,4 @@ if __name__ == "__main__":
     dest = Path(__file__).resolve().parent.parent / "backend" / "fixtures" / "self_check_test.wav"
     generate_self_check_wav(dest)
     print(f"Generated {dest} ({dest.stat().st_size} bytes)")
+

@@ -14,7 +14,38 @@ ChordLens analyses an audio file (MP3, WAV, M4A, FLAC) or a YouTube link and gen
   - Low model confidence beats (`< 55%`) are visibly marked.
   - Inline manual chord editing (`Edit chords`) plus **JSON** and **text chord sheet** export.
 
-## Installation
+## Install (for everyone)
+
+If you just want to use ChordLens on Windows 10 or 11 (64-bit), you do **not** need Python, Git, ffmpeg, Node, or administrator rights. Everything is bundled.
+
+1. **Download:** Grab `ChordLens-Setup-0.2.0.exe` (or the portable `.zip`) from [Releases](https://github.com/abikurian/chordlens/releases).
+2. **Install:** Double-click `ChordLens-Setup-0.2.0.exe`. It installs to `%LOCALAPPDATA%\Programs\ChordLens` without requiring administrator privileges, creates a desktop and Start Menu shortcut, and sets up cleanly.
+3. **SmartScreen warning:** Because ChordLens is an open-source build without an expensive commercial code-signing EV certificate, Windows Defender SmartScreen may display:
+   > *"Windows protected your PC — Microsoft Defender SmartScreen prevented an unrecognized app from starting."*
+
+   Click **More info**, then click **Run anyway**.
+   
+   To verify file integrity before running, check the SHA-256 hash in PowerShell:
+   ```powershell
+   Get-FileHash .\ChordLens-Setup-0.2.0.exe -Algorithm SHA256
+   ```
+   Compare the output to the official hash listed in `checksums.txt` or on the release page.
+
+4. **Where data lives:** All application data, analysis cache, downloaded models, and diagnostic logs are stored in:
+   ```text
+   %LOCALAPPDATA%\ChordLens
+   ```
+5. **How to uninstall:**
+   - Open **Windows Settings &rarr; Apps &rarr; Installed apps**, search for **ChordLens**, and click **Uninstall**.
+   - Or run `unins000.exe` located inside `%LOCALAPPDATA%\Programs\ChordLens`.
+
+> [!WARNING]
+> **Accurate mode (Demucs) CPU warning:**
+> By default, ChordLens uses **Fast mode**, which finishes analysis in 5–15 seconds on any modern computer. If you select **Accurate mode**, it runs Demucs stem separation; on a standard laptop CPU without a dedicated NVIDIA CUDA GPU, Demucs separation can take **10+ minutes** per song. For normal practice and fast playback, keep the default Fast mode.
+
+---
+
+## Installation (from source for developers)
 
 1. **Install Python 3.11** and **`ffmpeg`** (required for `yt-dlp` and `.m4a`/`.mp3` decoding). Verify `ffmpeg` is on your `PATH`:
    ```bash

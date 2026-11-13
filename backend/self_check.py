@@ -324,6 +324,9 @@ def cli_self_check() -> int:
     for item in report["checks"]:
         mark = "[PASS]" if item["passed"] else "[FAIL]"
         print(f"{mark} {item['name']}: {item['summary']}")
+        if item.get("id") == "models" and item["passed"] and item.get("details"):
+            for dline in str(item["details"]).splitlines():
+                print(f"       Model:   {dline}")
         if not item["passed"]:
             print(f"       Details: {item['details']}")
             if "fix" in item:

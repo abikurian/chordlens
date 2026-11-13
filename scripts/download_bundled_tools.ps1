@@ -64,3 +64,4 @@ if ($cfg -match "--enable-nonfree") {
 }
 
 Write-Host "SUCCESS: Both Deno (MIT) and FFmpeg/FFprobe (LGPL verified) are in $binDir!"
+

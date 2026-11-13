@@ -15,3 +15,4 @@ if (-not $exited) {
     Write-Host "Process finished with exit code: $($proc.ExitCode)"
     exit $proc.ExitCode
 }
+
