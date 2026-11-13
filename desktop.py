@@ -128,6 +128,17 @@ try:
 except Exception:
     pass
 
+# Early module forwarding (e.g. frozen yt-dlp) without polluting stdout
+if len(sys.argv) > 1 and sys.argv[1] == "-m" and len(sys.argv) > 2:
+    if sys.argv[2] == "yt_dlp":
+        if _orig_stdout is not None:
+            sys.stdout = _orig_stdout
+        if _orig_stderr is not None:
+            sys.stderr = _orig_stderr
+        import yt_dlp
+
+        sys.exit(yt_dlp.main(sys.argv[3:]))
+
 _log("=" * 60)
 _log("ChordLens starting up")
 _log(f"Python {sys.version}")
