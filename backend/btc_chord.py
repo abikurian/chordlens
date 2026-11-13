@@ -12,8 +12,22 @@ import numpy as np
 import torch
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-BTC_MODEL_DIR = BASE_DIR / "models" / "btc-chord"
 LOW_CONFIDENCE_THRESHOLD = 0.55
+
+
+def get_btc_model_dir() -> Path:
+    """Return the bundled or cached btc-chord directory containing weights and code."""
+    from backend.paths import get_bundled_models_dir, MODELS_DIR
+
+    candidates = [
+        get_bundled_models_dir() / "btc-chord",
+        MODELS_DIR / "btc-chord",
+        BASE_DIR / "models" / "btc-chord",
+    ]
+    for c in candidates:
+        if (c / "btc_model_large_voca.pt").is_file():
+            return c
+    return candidates[0]
 
 _BTC_CACHE: dict[str, Any] = {}
 
@@ -84,21 +98,28 @@ def _load_btc() -> tuple[Any, np.ndarray, np.ndarray, list[str]]:
             _BTC_CACHE["idx_to_chord"],
         )
 
-    if not (BTC_MODEL_DIR / "btc_model_large_voca.pt").exists():
+    model_dir = get_btc_model_dir()
+    pt_file = model_dir / "btc_model_large_voca.pt"
+
+    if not pt_file.is_file():
         from huggingface_hub import snapshot_download
+        from backend.paths import MODELS_DIR
 
-        BTC_MODEL_DIR.mkdir(parents=True, exist_ok=True)
-        snapshot_download("puar-playground/btc-chord", local_dir=str(BTC_MODEL_DIR))
+        target = MODELS_DIR / "btc-chord"
+        target.mkdir(parents=True, exist_ok=True)
+        snapshot_download("puar-playground/btc-chord", local_dir=str(target))
+        model_dir = target
+        pt_file = model_dir / "btc_model_large_voca.pt"
 
-    if str(BTC_MODEL_DIR) not in sys.path:
-        sys.path.insert(0, str(BTC_MODEL_DIR))
+    if str(model_dir) not in sys.path:
+        sys.path.insert(0, str(model_dir))
 
     BTC_model = importlib.import_module("btc_src.btc_model").BTC_model
     features = importlib.import_module("btc_src.features")
 
     model = BTC_model(config=_MODEL_CFG).to("cpu")
     ckpt = torch.load(
-        str(BTC_MODEL_DIR / "btc_model_large_voca.pt"),
+        str(pt_file),
         map_location="cpu",
         weights_only=False,
     )

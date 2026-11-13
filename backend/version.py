@@ -27,7 +27,7 @@ def get_version() -> str:
             return text
     except OSError:
         pass
-    return "0.1.2"
+    return "0.2.0"
 
 
 def get_version_tuple() -> tuple[int, int, int, int]:

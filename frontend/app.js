@@ -2051,6 +2051,101 @@ const clearCacheBtn = document.getElementById("clear-cache-btn");
 const updateYtdlpBtn = document.getElementById("update-ytdlp-btn");
 const cacheActionStatusEl = document.getElementById("cache-action-status");
 
+const runSelfCheckBtn = document.getElementById("run-self-check-btn");
+const selfCheckResultEl = document.getElementById("self-check-result");
+const selfCheckSummaryEl = document.getElementById("self-check-summary");
+const selfCheckDetailsWrap = document.getElementById("self-check-details-wrap");
+const selfCheckDetailsText = document.getElementById("self-check-details-text");
+const copyDiagnosticsBtn = document.getElementById("copy-diagnostics-btn");
+
+let lastSelfCheckReport = null;
+
+async function executeSelfCheck(silentIfOk = false) {
+  if (runSelfCheckBtn) {
+    runSelfCheckBtn.disabled = true;
+    runSelfCheckBtn.textContent = "Checking...";
+  }
+  try {
+    const { ok, data } = await fetchJsonSafe("/api/system/self-check");
+    if (!ok || !data) {
+      if (selfCheckResultEl && !silentIfOk) {
+        selfCheckResultEl.hidden = false;
+        if (selfCheckSummaryEl) {
+          selfCheckSummaryEl.className = "self-check-summary is-err";
+          selfCheckSummaryEl.textContent = "Could not run self-check.";
+        }
+      }
+      return;
+    }
+    lastSelfCheckReport = data;
+    const allPassed = Boolean(data.all_passed);
+
+    if (selfCheckResultEl) {
+      if (allPassed) {
+        if (!silentIfOk) {
+          selfCheckResultEl.hidden = false;
+        }
+        if (selfCheckSummaryEl) {
+          selfCheckSummaryEl.className = "self-check-summary is-ok";
+          selfCheckSummaryEl.textContent = "✓ Ready to analyze songs";
+        }
+        try {
+          localStorage.setItem("chordlens_self_check_v020", "passed");
+        } catch {}
+      } else {
+        selfCheckResultEl.hidden = false;
+        if (selfCheckSummaryEl) {
+          selfCheckSummaryEl.className = "self-check-summary is-err";
+          selfCheckSummaryEl.textContent = data.message || "Installation check found an issue.";
+        }
+      }
+
+      if (selfCheckDetailsWrap && selfCheckDetailsText && data.checks) {
+        if (!silentIfOk || !allPassed) {
+          selfCheckDetailsWrap.hidden = false;
+        }
+        const lines = data.checks
+          .map((c) => `[${c.passed ? "PASS" : "FAIL"}] ${c.name}: ${c.summary}\n${c.details || ""}`)
+          .join("\n\n");
+        selfCheckDetailsText.textContent = lines;
+      }
+    }
+  } catch (err) {
+    if (selfCheckResultEl && !silentIfOk) {
+      selfCheckResultEl.hidden = false;
+      if (selfCheckSummaryEl) {
+        selfCheckSummaryEl.className = "self-check-summary is-err";
+        selfCheckSummaryEl.textContent = err.message || "Failed to execute self-check.";
+      }
+    }
+  } finally {
+    if (runSelfCheckBtn) {
+      runSelfCheckBtn.disabled = false;
+      runSelfCheckBtn.textContent = "Run self-check";
+    }
+  }
+}
+
+if (runSelfCheckBtn) {
+  runSelfCheckBtn.addEventListener("click", () => executeSelfCheck(false));
+}
+
+if (copyDiagnosticsBtn) {
+  copyDiagnosticsBtn.addEventListener("click", () => {
+    const text = lastSelfCheckReport
+      ? JSON.stringify(lastSelfCheckReport, null, 2)
+      : (selfCheckDetailsText?.textContent || "No diagnostics available");
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(text).then(() => {
+        copyDiagnosticsBtn.textContent = "Copied!";
+        setTimeout(() => {
+          copyDiagnosticsBtn.textContent = "Copy details";
+        }, 2000);
+      });
+    }
+  });
+}
+
 async function loadAppHealthAndDiagnostics() {
   try {
     const { ok, data } = await fetchJsonSafe("/api/health");
@@ -2130,4 +2225,14 @@ if (updateYtdlpBtn) {
 }
 
 loadAppHealthAndDiagnostics();
+
+try {
+  if (localStorage.getItem("chordlens_self_check_v020") !== "passed") {
+    setTimeout(() => {
+      executeSelfCheck(true);
+    }, 1500);
+  }
+} catch {
+  // Ignore localStorage access restrictions
+}
 

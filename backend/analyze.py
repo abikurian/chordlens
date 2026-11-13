@@ -13,12 +13,11 @@ import librosa
 import numpy as np
 import scipy.ndimage
 
+from backend.paths import CACHE_DIR, get_bundled_models_dir, MODELS_DIR
+
 logger = logging.getLogger(__name__)
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-CACHE_DIR = BASE_DIR / "cache"
-BEAT_THIS_CKPT_DIR = BASE_DIR / "models" / "beat_this"
-BEAT_THIS_CKPT_PATH = BEAT_THIS_CKPT_DIR / "final0.ckpt"
 BEAT_THIS_CKPT_URL = "https://cloud.cp.jku.at/index.php/s/7ik4RrBKTS273gp"
 CACHE_VERSION = "v3"
 
@@ -251,23 +250,39 @@ def _track_beats_librosa(
     return tempo, beat_times, downbeats, "4/4", beats_estimated
 
 
+def _find_beat_this_checkpoint() -> Path | None:
+    candidates = [
+        get_bundled_models_dir() / "beat_this" / "final0.ckpt",
+        MODELS_DIR / "beat_this" / "final0.ckpt",
+        BASE_DIR / "models" / "beat_this" / "final0.ckpt",
+    ]
+    for cand in candidates:
+        if cand.is_file() and cand.stat().st_size > 0:
+            return cand
+    try:
+        import torch
+
+        hub_ckpt = Path(torch.hub.get_dir()) / "checkpoints" / "beat_this-final0.ckpt"
+        if hub_ckpt.is_file() and hub_ckpt.stat().st_size > 0:
+            return hub_ckpt
+    except Exception:
+        pass
+    return None
+
+
 def _ensure_beat_this_checkpoint(progress_cb=None) -> Path:
-    """Return local beat_this checkpoint path if present; otherwise instruct manual download."""
-    import torch
+    """Return local or bundled beat_this checkpoint path if present; otherwise instruct reinstall or manual download."""
+    found = _find_beat_this_checkpoint()
+    if found:
+        return found
 
-    if BEAT_THIS_CKPT_PATH.is_file() and BEAT_THIS_CKPT_PATH.stat().st_size > 0:
-        return BEAT_THIS_CKPT_PATH
-
-    hub_ckpt = Path(torch.hub.get_dir()) / "checkpoints" / "beat_this-final0.ckpt"
-    if hub_ckpt.is_file() and hub_ckpt.stat().st_size > 0:
-        return hub_ckpt
-
+    primary = get_bundled_models_dir() / "beat_this" / "final0.ckpt"
     msg = (
-        f"beat_this checkpoint not found. Download it manually from "
-        f"{BEAT_THIS_CKPT_URL} and save it in folder '{BEAT_THIS_CKPT_DIR}' as 'final0.ckpt' "
-        f"(full path: {BEAT_THIS_CKPT_PATH})."
+        f"beat_this checkpoint not found (expected at {primary}). "
+        "If you are running the installed app, please reinstall ChordLens. "
+        f"If running from source, download it from {BEAT_THIS_CKPT_URL} into models/beat_this/final0.ckpt."
     )
-    print(msg)
+    logger.error(msg)
     if progress_cb:
         progress_cb(msg)
     raise FileNotFoundError(msg)

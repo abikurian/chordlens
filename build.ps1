@@ -45,10 +45,9 @@ if (-not $SkipInstaller) {
     $iscc = (Get-Command iscc -ErrorAction SilentlyContinue).Source
     if (-not $iscc) {
         $candidatePaths = @(
-            "C:\Users\Abi kurian\AppData\Local\Programs\Antigravity IDE\resources\app\node_modules\innosetup\bin\ISCC.exe",
+            "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe",
             "C:\Program Files (x86)\Inno Setup 6\ISCC.exe",
-            "C:\Program Files\Inno Setup 6\ISCC.exe",
-            "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe"
+            "C:\Program Files\Inno Setup 6\ISCC.exe"
         )
         foreach ($cand in $candidatePaths) {
             if (Test-Path $cand) {

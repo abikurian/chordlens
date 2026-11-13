@@ -114,7 +114,14 @@ def favicon() -> FileResponse:
 @app.get("/api/health")
 def health() -> dict[str, Any]:
     status = get_system_status()
-    models_present = bool(list(MODELS_DIR.glob("*.pt")) or list(MODELS_DIR.glob("*.pth")))
+    from backend.paths import get_bundled_models_dir
+
+    bundled_models = get_bundled_models_dir()
+    models_present = bool(
+        (bundled_models / "beat_this" / "final0.ckpt").is_file()
+        or list(MODELS_DIR.glob("*.pt"))
+        or list(MODELS_DIR.glob("*.pth"))
+    )
     return {
         "status": "ok",
         "version": get_version(),
@@ -123,6 +130,13 @@ def health() -> dict[str, Any]:
         "models": "present" if models_present else "on-demand",
         "data_dir": str(DATA_DIR),
     }
+
+
+@app.get("/api/system/self-check")
+def self_check_endpoint() -> dict[str, Any]:
+    from backend.self_check import run_self_check
+
+    return run_self_check()
 
 
 @app.post("/api/system/open-data-dir")

@@ -11,6 +11,10 @@ ROOT = Path.cwd()
 datas = [
     (str(ROOT / "frontend"), "frontend"),
     (str(ROOT / "VERSION"), "."),
+    (str(ROOT / "THIRD_PARTY_LICENSES.md"), "."),
+    (str(ROOT / "bin"), "bin"),
+    (str(ROOT / "models"), "models"),
+    (str(ROOT / "backend" / "fixtures"), "backend/fixtures"),
 ]
 
 # Collect any data files needed by audio libraries
@@ -37,6 +41,13 @@ hiddenimports = [
     "webview.platforms.edgechromium",
     "clr",
     "pythonnet",
+    "backend.self_check",
+    "yt_dlp",
+    "yt_dlp.version",
+    "btc_src",
+    "btc_src.btc_model",
+    "btc_src.features",
+    "btc_src.transformer_modules",
 ]
 
 excludes = [
@@ -51,7 +62,7 @@ excludes = [
 
 a = Analysis(
     ["desktop.py"],
-    pathex=[str(ROOT)],
+    pathex=[str(ROOT), str(ROOT / "models" / "btc-chord")],
     binaries=[],
     datas=datas,
     hiddenimports=hiddenimports,

@@ -2,6 +2,25 @@
 
 All notable changes to ChordLens are documented in this file.
 
+## [0.2.0] - 2026-11-13
+
+### Added
+- Fully self-contained Windows application bundle:
+  - Bundled LGPL build of `ffmpeg.exe` and `ffprobe.exe` (BtbN Windows x64 build, verified without `--enable-gpl` or `--enable-nonfree`).
+  - Bundled standalone Deno JavaScript runtime (`bin/deno.exe`, MIT) powering `yt-dlp` YouTube extraction without requiring external Node or Deno installations.
+  - Bundled Fast-mode pre-trained models (`beat_this/final0.ckpt` and `btc-chord/btc_model_large_voca.pt`), eliminating first-run model downloads.
+- Comprehensive system self-check (`backend/self_check.py`):
+  - CLI mode via `ChordLens.exe --self-check` for unattended headless verification (returns exit code 0 on success, 1 on failure).
+  - In-app interactive self-check accessible under **Settings &rarr; About &rarr; Run self-check**, featuring plain-language status, technical breakdown, and a "Copy details" action.
+  - Automatic background verification on first application launch.
+- `THIRD_PARTY_LICENSES.md` detailing licenses, sources, and compliance verification for all bundled third-party binaries and neural network checkpoints.
+- Synthetic 10-second C-G-Am-F audio fixture (`backend/fixtures/self_check_test.wav`) and generation script (`scripts/generate_test_clip.py`) for deterministic pipeline verification.
+
+### Changed
+- `backend/paths.py`, `backend/ffmpeg_utils.py`, `backend/analyze.py`, and `backend/btc_chord.py` prioritize bundled binaries and models from the application folder before checking local app data or system PATH.
+- Removed external WinGet/Chocolatey installation prompts; missing dependency errors now clearly prompt reinstalling the application.
+- Made build scripts and path resolvers machine-agnostic, stripping all user-specific or drive-specific paths.
+
 ## [0.1.2] - 2026-11-13
 
 ### Fixed

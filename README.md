@@ -41,16 +41,15 @@ YouTube changes its player format frequently. If YouTube downloads start failing
 .\.venv\Scripts\python.exe -m pip install -U yt-dlp
 ```
 
-### ffmpeg troubleshooting
+### Bundled toolchain & self-check
 
-On startup, ChordLens checks `PATH` and common Windows install folders (WinGet, Chocolatey, `C:\ffmpeg\bin`) and prints `ffmpeg`, `ffprobe`, `js_runtime`, and `yt-dlp` status in the terminal. If `ffmpeg` is missing:
+ChordLens bundles an official **LGPL** build of `ffmpeg` and `ffprobe` (built by BtbN, verified to contain no `--enable-gpl` and no `--enable-nonfree`), a **Deno** JavaScript runtime (MIT) for `yt-dlp` YouTube extraction, and the Fast-mode models (`beat_this` and `btc-chord`). The desktop build is completely self-contained and runs on a clean Windows PC without needing external tools or developer dependencies.
 
-1. Install it with:
-   ```powershell
-   winget install Gyan.FFmpeg
-   ```
-2. Close and reopen your terminal, then restart `uvicorn`.
-3. As a fallback for audio-only files, you can also install `imageio-ffmpeg` (`BSD-2-Clause` Python wrapper around an LGPL/GPL `ffmpeg` binary) or upload a `.wav` file directly.
+You can verify your installation anytime:
+- From the CLI: `ChordLens.exe --self-check`
+- From the UI: **Settings &rarr; About &rarr; Run self-check**
+
+See `THIRD_PARTY_LICENSES.md` for full component sources, license texts, and LGPL verification details.
 
 ## Running the App
 
@@ -190,7 +189,8 @@ To release a new version:
 | **pywebview** | [r0x0r/pywebview](https://github.com/r0x0r/pywebview) | BSD-3-Clause | Uses system WebView2 runtime (Edge) | Personal and public/commercial use allowed |
 | **Inno Setup** | [jrsoftware/issrc](https://github.com/jrsoftware/issrc) | Inno Setup Licence (BSD-style permissive) | N/A | Personal and public/commercial use allowed |
 | **Playwright** *(dev-only)* | [microsoft/playwright-python](https://github.com/microsoft/playwright-python) | Apache-2.0 | Dev/testing fixture screenshot tool only, not bundled in app | Personal and public use allowed |
-| **ffmpeg** *(external binary)* | [ffmpeg.org](https://ffmpeg.org/) | LGPL v2.1+ or GPL v2+/v3+ | Windows `gyan.dev` `full_build` is GPL v3; ChordLens does **not** bundle GPL binaries in the installer and detects system ffmpeg or downloads on-demand | Personal use OK; if bundling `ffmpeg` in a public release, verify LGPL vs GPL build terms |
+| **ffmpeg & ffprobe** *(bundled binary)* | [BtbN/FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds) | LGPL v2.1+ | Official BtbN LGPL Windows x64 build, verified without `--enable-gpl` and without `--enable-nonfree`. Documented in `THIRD_PARTY_LICENSES.md`. | Personal and public/commercial use allowed under LGPL v2.1+ |
+| **Deno** *(bundled binary)* | [denoland/deno](https://github.com/denoland/deno) | MIT | Standalone JavaScript runtime for `yt-dlp` YouTube extraction | Personal and public use allowed under MIT |
 
 ## Notice
 

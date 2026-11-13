@@ -14,8 +14,10 @@ __pycache__/
 tmp/
 uploads/
 cache/
+bin/
 *.mp3
 *.wav
+!backend/fixtures/self_check_test.wav
 *.m4a
 *.flac
 *.ogg

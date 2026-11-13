@@ -234,6 +234,28 @@ def acquire_single_instance_mutex():
 def main():
     _log("main() entered")
 
+    # Fast CLI handling: self-check
+    if "--self-check" in sys.argv:
+        if _orig_stdout is not None:
+            sys.stdout = _orig_stdout
+        if _orig_stderr is not None:
+            sys.stderr = _orig_stderr
+        from backend.self_check import cli_self_check
+
+        code = cli_self_check()
+        sys.exit(code)
+
+    # Subprocess module forwarding (e.g. frozen yt-dlp)
+    if len(sys.argv) > 1 and sys.argv[1] == "-m" and len(sys.argv) > 2:
+        if sys.argv[2] == "yt_dlp":
+            if _orig_stdout is not None:
+                sys.stdout = _orig_stdout
+            if _orig_stderr is not None:
+                sys.stderr = _orig_stderr
+            import yt_dlp
+
+            sys.exit(yt_dlp.main(sys.argv[3:]))
+
     if not acquire_single_instance_mutex():
         _log("Exiting: another instance is already running")
         sys.exit(0)
