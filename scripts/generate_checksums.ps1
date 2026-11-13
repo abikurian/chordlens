@@ -10,3 +10,4 @@ $portableHash  ChordLens-v0.2.0-windows-x64.zip
 $content | Set-Content -Path "checksums.txt" -Encoding UTF8
 Write-Host "Generated checksums.txt:"
 Get-Content "checksums.txt"
+
