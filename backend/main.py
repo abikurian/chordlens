@@ -40,9 +40,30 @@ JOBS: dict[str, dict[str, Any]] = {}
 app = FastAPI(title="ChordLens", version=get_version())
 
 
+def _warm_models_bg():
+    try:
+        import os
+        import torch
+        torch.set_num_threads(os.cpu_count() or 4)
+        from backend.btc_chord import _load_btc
+        _load_btc()
+        from backend.analyze import _find_beat_this_checkpoint
+        ckpt = _find_beat_this_checkpoint()
+        if ckpt:
+            from beat_this.inference import Audio2Beats
+            import backend.analyze as b_an
+            if b_an._BEAT_THIS_MODEL is None:
+                b_an._BEAT_THIS_MODEL = Audio2Beats(checkpoint_path=str(ckpt), device="cpu", dbn=False)
+        append_to_app_log("[STARTUP] Pre-warmed Fast-mode models (beat_this & BTC) in background thread")
+    except Exception as exc:
+        append_to_app_log(f"[STARTUP] Background model warm skipped: {exc}")
+
+
 @app.on_event("startup")
 def on_startup() -> None:
     log_startup_toolchain()
+    import threading
+    threading.Thread(target=_warm_models_bg, daemon=True, name="ModelWarmer").start()
 
 
 @app.middleware("http")
@@ -61,8 +82,9 @@ class AnalyzeUrlRequest(BaseModel):
 
 
 def _find_audio_file(audio_id: str) -> Path | None:
-    # Prevent path traversal by allowing only alphanumeric characters
-    if not audio_id.isalnum():
+    # Prevent path traversal by allowing only safe alphanumeric, underscore, and hyphen characters
+    import re
+    if not re.match(r"^[a-zA-Z0-9_\-]+$", audio_id):
         return None
     for directory in (UPLOAD_DIR, CACHE_YT_DIR):
         for candidate in directory.glob(f"{audio_id}.*"):
@@ -75,9 +97,12 @@ def _get_or_download_youtube(
     url: str,
     cookies_browser: str | None = None,
 ) -> tuple[str, Path, str]:
+    from backend.youtube import extract_youtube_video_id
     clean_url = normalize_youtube_url(url)
-    url_hash = hashlib.sha256(clean_url.encode("utf-8")).hexdigest()[:24]
-    audio_id = f"yt{url_hash}"
+    video_id = extract_youtube_video_id(clean_url)
+    # Sanitize video_id for filesystem safety
+    safe_id = "".join(c for c in video_id if c.isalnum() or c in ("-", "_"))[:32]
+    audio_id = f"yt_{safe_id}"
     meta_path = CACHE_YT_DIR / f"{audio_id}.json"
     cached_audio = _find_audio_file(audio_id)
 
@@ -100,7 +125,7 @@ def _get_or_download_youtube(
         cookies_browser=cookies_browser,
     )
     meta_path.write_text(
-        json.dumps({"title": title, "url": clean_url}, ensure_ascii=False),
+        json.dumps({"title": title, "url": clean_url, "video_id": video_id}, ensure_ascii=False),
         encoding="utf-8",
     )
     return audio_id, audio_path, title

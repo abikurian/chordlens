@@ -56,6 +56,52 @@ def _file_sha256(file_path: Path) -> str:
     return h.hexdigest()
 
 
+def load_audio_fast(path: Path | str, target_sr: int = 22050) -> tuple[np.ndarray, float]:
+    """Fast mono audio loading.
+
+    Attempts soundfile for WAV/FLAC first; falls back to direct ffmpeg pipe decode
+    (10-20x faster than audioread for M4A/MP3/Opus), and finally to librosa.load.
+    """
+    path_obj = Path(path)
+    # 1. Try soundfile directly for wav/flac
+    if path_obj.suffix.lower() in {".wav", ".flac"}:
+        try:
+            import soundfile as sf
+            data, orig_sr = sf.read(str(path_obj), dtype="float32")
+            if data.ndim > 1:
+                data = data.mean(axis=1)
+            if orig_sr == target_sr:
+                return data, float(len(data) / target_sr)
+        except Exception:
+            pass
+
+    # 2. Try fast direct ffmpeg stream decode (decodes directly to target_sr mono float32)
+    try:
+        from backend.ffmpeg_utils import configure_ffmpeg_env
+        import subprocess
+        toolchain = configure_ffmpeg_env()
+        ffmpeg_bin = toolchain.get("ffmpeg") or "ffmpeg"
+        cmd = [
+            str(ffmpeg_bin),
+            "-v", "error",
+            "-i", str(path_obj),
+            "-f", "s16le",
+            "-ac", "1",
+            "-ar", str(target_sr),
+            "-"
+        ]
+        proc = subprocess.run(cmd, capture_output=True, check=True)
+        if len(proc.stdout) > 0:
+            raw = np.frombuffer(proc.stdout, dtype=np.int16).astype(np.float32) / 32768.0
+            return raw, float(len(raw) / target_sr)
+    except Exception:
+        pass
+
+    # 3. Fallback to standard librosa.load
+    y, sr = librosa.load(str(path_obj), sr=target_sr, mono=True)
+    return y, float(len(y) / target_sr)
+
+
 def build_chord_templates() -> tuple[list[str], np.ndarray, np.ndarray, list[int]]:
     """Build L2-normalized, root-weighted 12-bin chroma templates."""
     labels: list[str] = []
@@ -293,13 +339,18 @@ def _track_beats_beat_this(
 ) -> tuple[float, list[float], list[float], str]:
     """Track beats and downbeats using CPJKU beat_this on CPU."""
     global _BEAT_THIS_MODEL
+    import torch
+    import os
+    torch.set_num_threads(os.cpu_count() or 4)
+
     if _BEAT_THIS_MODEL is None:
         from beat_this.inference import Audio2Beats
 
         ckpt_path = _ensure_beat_this_checkpoint(progress_cb=progress_cb)
         _BEAT_THIS_MODEL = Audio2Beats(checkpoint_path=str(ckpt_path), device="cpu", dbn=False)
 
-    beats_arr, downbeats_arr = _BEAT_THIS_MODEL(y_beat.astype(np.float32), sr)
+    with torch.inference_mode():
+        beats_arr, downbeats_arr = _BEAT_THIS_MODEL(y_beat.astype(np.float32), sr)
     beat_times = [float(t) for t in np.atleast_1d(beats_arr) if 0.0 <= t <= duration]
     downbeats = [float(t) for t in np.atleast_1d(downbeats_arr) if 0.0 <= t <= duration]
 
@@ -495,6 +546,7 @@ def detect_sections(
     sr: int,
     beat_times: list[float],
     duration: float,
+    chroma: np.ndarray | None = None,
 ) -> list[dict[str, Any]]:
     """Estimate rough song sections (Intro, Verse, Chorus, Bridge, Outro) from bar chroma & energy."""
     if len(beat_times) < 8:
@@ -516,7 +568,8 @@ def detect_sections(
         y_22k = y_harm
 
     beat_frames = librosa.time_to_frames(np.array(beat_times), sr=sr)
-    chroma = librosa.feature.chroma_cqt(y=y_22k, sr=sr, bins_per_octave=24)
+    if chroma is None:
+        chroma = librosa.feature.chroma_cqt(y=y_22k, sr=sr, bins_per_octave=24)
     rms = librosa.feature.rms(y=y_22k)
 
     beat_chroma = _sync_beats_exact(chroma, beat_frames)
@@ -536,13 +589,11 @@ def detect_sections(
             }
         ]
 
-    # Aggregate 4-beat bars
-    bar_chroma = np.array(
-        [np.mean(beat_chroma[:, b * 4 : (b + 1) * 4], axis=1) for b in range(n_bars)]
-    )  # [n_bars, 12]
-    bar_energy = np.array(
-        [float(np.mean(beat_rms[b * 4 : (b + 1) * 4])) for b in range(n_bars)]
-    )
+    # Vectorized 4-beat bar aggregation
+    n_bars_4 = n_bars * 4
+    bar_chroma = beat_chroma[:, :n_bars_4].reshape(12, n_bars, 4).mean(axis=2).T  # [n_bars, 12]
+    bar_energy = beat_rms[:n_bars_4].reshape(n_bars, 4).mean(axis=1)  # [n_bars]
+
     norms = np.linalg.norm(bar_chroma, axis=1, keepdims=True)
     bar_chroma_norm = bar_chroma / np.where(norms > 1e-8, norms, 1.0)
 
@@ -706,8 +757,7 @@ def analyze_audio(
         if progress_cb:
             progress_cb("Loading audio (Fast mode)...")
         stem_sr = 22050
-        y, stem_sr = librosa.load(str(path), sr=stem_sr, mono=True)
-        duration = float(librosa.get_duration(y=y, sr=stem_sr))
+        y, duration = load_audio_fast(path, target_sr=stem_sr)
         if duration < 0.5 or np.max(np.abs(y)) < 1e-6:
             raise ValueError("The audio file appears to be empty or silent.")
         harm_mix_mono = y
@@ -729,8 +779,7 @@ def analyze_audio(
         except Exception as exc:
             logger.warning("Demucs failed (%s); falling back to librosa HPSS.", exc)
             stem_sr = 22050
-            y, stem_sr = librosa.load(str(path), sr=stem_sr, mono=True)
-            duration = float(librosa.get_duration(y=y, sr=stem_sr))
+            y, duration = load_audio_fast(path, target_sr=stem_sr)
             if duration < 0.5 or np.max(np.abs(y)) < 1e-6:
                 raise ValueError("The audio file appears to be empty or silent.")
             harm_mix_mono, drums_mono = librosa.effects.hpss(y)
@@ -782,7 +831,7 @@ def analyze_audio(
 
     if progress_cb:
         progress_cb("Estimating song sections...")
-    sections = detect_sections(harm_22k, 22050, beat_times, duration)
+    sections = detect_sections(harm_22k, 22050, beat_times, duration, chroma=chroma_for_key)
 
     result = {
         "duration": round(duration, 3),

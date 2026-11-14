@@ -1,3 +1,3 @@
 ﻿# ChordLens v0.2.0 Release Checksums (SHA256)
-f200f47e55f0db288bb217ba004c6a66ea324e501098d9305b626c4d7af1c54a  ChordLens-Setup-0.2.0.exe
+544165640bc64ad8aa5534bee5dd62237361656eb3257aebb1a0ac87a17e3a39  ChordLens-Setup-0.2.0.exe
 c78e73bf0e2b6600738f76fed974da35b93aba57a9ad5dcad8dbb437a6e996a7  ChordLens-v0.2.0-windows-x64.zip

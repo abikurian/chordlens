@@ -134,14 +134,17 @@ def _load_btc() -> tuple[Any, np.ndarray, np.ndarray, list[str]]:
     return model, ckpt["mean"], ckpt["std"], idx_to_chord
 
 
-@torch.no_grad()
+@torch.inference_mode()
 def predict_chords_btc(
     audio_mono: np.ndarray,
     sr: int,
     beat_times: list[float],
     duration: float,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """Run BTC chord recognition and align probabilities to beat intervals."""
+    """Run BTC chord recognition with batched inference and align probabilities to beat intervals."""
+    import os
+    torch.set_num_threads(os.cpu_count() or 4)
+
     model, mean, std, idx_to_chord = _load_btc()
     features = importlib.import_module("btc_src.features")
 
@@ -169,13 +172,16 @@ def predict_chords_btc(
         feat = np.pad(feat, ((0, num_pad), (0, 0)), mode="constant", constant_values=0)
     num_instance = feat.shape[0] // n
 
-    x = torch.tensor(feat, dtype=torch.float32).unsqueeze(0)
+    # Vectorized batched inference across all time segments
+    x_batched = torch.tensor(feat, dtype=torch.float32).reshape(num_instance, n, -1)
     prob_chunks: list[np.ndarray] = []
-    for t in range(num_instance):
-        attn_out, _ = model.self_attn_layers(x[:, n * t : n * (t + 1), :])
-        logits = model.output_layer(attn_out)  # [1, 108, 170]
-        probs = torch.softmax(logits, dim=-1).squeeze(0).cpu().numpy()
-        prob_chunks.append(probs)
+    batch_size = 16
+    for b_start in range(0, num_instance, batch_size):
+        b_end = min(b_start + batch_size, num_instance)
+        attn_out, _ = model.self_attn_layers(x_batched[b_start:b_end])
+        logits = model.output_layer(attn_out)  # [B, 108, 170]
+        probs = torch.softmax(logits, dim=-1).cpu().numpy()
+        prob_chunks.extend(probs)
 
     frame_probs = np.vstack(prob_chunks)[:n_orig_frames]  # [T_orig, 170]
     time_unit = _FEATURE_CFG["inst_len"] / _TIMESTEP  # ~0.09259s per frame

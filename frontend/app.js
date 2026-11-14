@@ -1892,6 +1892,16 @@ function updateFileSelectionUI(file) {
       const promptEl = dropZoneContent.querySelector(".drop-zone-prompt");
       if (promptEl) promptEl.textContent = "File selected (click or drop to change)";
     }
+    // Instant audio player load: start audio player immediately so user can listen while analyzing
+    try {
+      const localUrl = URL.createObjectURL(file);
+      audioPlayer.src = localUrl;
+      audioPlayer.load();
+      if (songTitleEl) songTitleEl.textContent = file.name.replace(/\.[^/.]+$/, "");
+      if (nowPlayingWrap) nowPlayingWrap.hidden = false;
+    } catch (e) {
+      console.warn("Could not load immediate audio preview:", e);
+    }
   } else {
     selectedFileNameEl.textContent = "";
     selectedFileNameEl.hidden = true;
@@ -1962,7 +1972,7 @@ async function pollJobUntilDone(jobId) {
     if (job.stage) {
       setStatus(job.stage, "info");
     }
-    await new Promise((resolve) => setTimeout(resolve, 750));
+    await new Promise((resolve) => setTimeout(resolve, 300));
   }
 }
 

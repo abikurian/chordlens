@@ -76,6 +76,24 @@ def normalize_youtube_url(url: str) -> str:
     return urlunparse(("https", host, parsed.path, "", new_query, ""))
 
 
+def extract_youtube_video_id(url: str) -> str:
+    """Extract canonical YouTube video ID from any watch, short, embed, or youtu.be URL."""
+    clean_url = normalize_youtube_url(url)
+    parsed = urlparse(clean_url)
+    host = (parsed.hostname or "").lower()
+    if host == "youtu.be":
+        vid = parsed.path.strip("/").split("/")[0]
+        if vid:
+            return vid
+    qs = parse_qs(parsed.query)
+    if "v" in qs and qs["v"]:
+        return qs["v"][0]
+    parts = [p for p in parsed.path.split("/") if p]
+    if len(parts) >= 2 and parts[0] in ("embed", "v", "shorts"):
+        return parts[1]
+    return hashlib.sha256(clean_url.encode("utf-8")).hexdigest()[:16]
+
+
 def is_valid_youtube_url(url: str) -> bool:
     """Return True if the URL is a supported YouTube video link."""
     try:
@@ -136,9 +154,9 @@ def download_youtube_audio(
     file_stem: str,
     cookies_browser: str | None = None,
 ) -> tuple[Path, str]:
-    """Download audio from YouTube as a WAV file via yt-dlp + ffmpeg.
+    """Download audio from YouTube in a single fast yt-dlp call (audio only, concurrent fragments).
 
-    Returns (wav_path, video_title).
+    Returns (audio_path, video_title).
     """
     clean_url = normalize_youtube_url(url)
     toolchain = configure_ffmpeg_env()
@@ -159,60 +177,21 @@ def download_youtube_audio(
     js_args = _detect_js_runtime_args(toolchain)
     base_cmd = [sys.executable, "-m", "yt_dlp", "--no-playlist", *ffmpeg_args, *js_args, *cookie_args]
 
-    # Fetch title and duration first (fast, no download)
-    title = "YouTube Audio"
-    try:
-        info_proc = subprocess.run(
-            [*base_cmd, "--dump-single-json", "--skip-download", clean_url],
-            capture_output=True,
-            text=True,
-            timeout=30,
-            check=False,
-        )
-    except subprocess.TimeoutExpired as exc:
-        raise RuntimeError(
-            "Timed out checking YouTube video details. Try again or download the audio yourself and use the upload box."
-        ) from exc
-    except FileNotFoundError as exc:
-        raise RuntimeError(friendly_error_message(exc, context="youtube")) from exc
-
-    if info_proc.returncode == 0 and info_proc.stdout.strip():
-        meta = safe_json_loads(
-            info_proc.stdout,
-            context="youtube.py:download_youtube_audio(info_proc.stdout)",
-            allow_fallback=True,
-            fallback_value=None,
-        )
-        if isinstance(meta, dict):
-            if meta.get("title"):
-                title = str(meta["title"]).strip()
-            duration = meta.get("duration")
-            if isinstance(duration, (int, float)) and duration > MAX_YOUTUBE_DURATION_SEC:
-                mins = int(duration // 60)
-                secs = int(duration % 60)
-                raise ValueError(
-                    f"Video is {mins}m {secs}s long (limit is 12 minutes). "
-                    "Download the audio yourself and use the upload box instead."
-                )
-    elif info_proc.returncode != 0:
-        err = (info_proc.stderr or info_proc.stdout or "").strip()
-        if err:
-            raise RuntimeError(_friendly_yt_dlp_error(err))
-
     output_dir.mkdir(parents=True, exist_ok=True)
     output_template = str(output_dir / f"{file_stem}.%(ext)s")
 
+    # Fast single-pass download: fetch audio stream with concurrent fragments and dump JSON metadata in one command
     cmd = [
         *base_cmd,
+        "-f", "ba[ext=m4a]/ba",
         "-x",
-        "--audio-format",
-        "wav",
-        "--audio-quality",
-        "0",
-        "-o",
-        output_template,
+        "--audio-format", "m4a",
+        "--concurrent-fragments", "5",
+        "--print-json",
+        "-o", output_template,
         clean_url,
     ]
+
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=240, check=False)
     except subprocess.TimeoutExpired as exc:
@@ -227,14 +206,45 @@ def download_youtube_audio(
         append_to_app_log(f"[YOUTUBE ERROR] yt-dlp download failed (code {proc.returncode}):\n{err}")
         raise RuntimeError(_friendly_yt_dlp_error(err))
 
-    wav_path = output_dir / f"{file_stem}.wav"
-    if not wav_path.exists():
-        matches = list(output_dir.glob(f"{file_stem}.*"))
-        if not matches:
-            raise RuntimeError(
-                "yt-dlp finished but no audio file was produced. "
-                "Download the audio yourself and use the upload box."
+    title = "YouTube Audio"
+    meta = None
+    for line in proc.stdout.splitlines():
+        line = line.strip()
+        if line.startswith("{") and line.endswith("}"):
+            meta = safe_json_loads(
+                line,
+                context="youtube.py:download_youtube_audio(print-json)",
+                allow_fallback=True,
+                fallback_value=None,
             )
-        wav_path = matches[0]
+            if isinstance(meta, dict) and meta.get("title"):
+                break
 
-    return wav_path, title
+    if isinstance(meta, dict):
+        if meta.get("title"):
+            title = str(meta["title"]).strip()
+        duration = meta.get("duration")
+        if isinstance(duration, (int, float)) and duration > MAX_YOUTUBE_DURATION_SEC:
+            # Clean up downloaded files
+            for candidate in output_dir.glob(f"{file_stem}.*"):
+                candidate.unlink(missing_ok=True)
+            mins = int(duration // 60)
+            secs = int(duration % 60)
+            raise ValueError(
+                f"Video is {mins}m {secs}s long (limit is 12 minutes). "
+                "Download the audio yourself and use the upload box instead."
+            )
+
+    matches = [
+        p for p in output_dir.glob(f"{file_stem}.*")
+        if p.is_file() and p.suffix.lower() != ".json"
+    ]
+    if not matches:
+        raise RuntimeError(
+            "yt-dlp finished but no audio file was produced. "
+            "Download the audio yourself and use the upload box."
+        )
+
+    # Prefer m4a if multiple extensions exist, else take first
+    chosen = next((p for p in matches if p.suffix.lower() == ".m4a"), matches[0])
+    return chosen, title
