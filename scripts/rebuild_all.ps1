@@ -3,6 +3,25 @@ $ROOT = (Resolve-Path ".").Path
 Set-Location $ROOT
 
 Write-Host "=== Rebuilding ChordLens Desktop App & Installer ==="
+
+# Frontend JavaScript syntax check
+Write-Host "[Step 0/2] Checking frontend JavaScript syntax..."
+$jsFiles = Get-ChildItem -Path "$ROOT\frontend" -Filter *.js
+$syntaxFailed = $false
+foreach ($js in $jsFiles) {
+    & node --check $js.FullName
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "Syntax check FAILED for: $($js.Name)"
+        $syntaxFailed = $true
+    } else {
+        Write-Host "  [PASS] $($js.Name)"
+    }
+}
+if ($syntaxFailed) {
+    Write-Error "Frontend JavaScript syntax check failed. Aborting build."
+    exit 1
+}
+
 Write-Host "[Step 1/2] Running PyInstaller on ChordLens.spec..."
 
 & "$ROOT\.venv\Scripts\pyinstaller.exe" --noconfirm "$ROOT\ChordLens.spec"

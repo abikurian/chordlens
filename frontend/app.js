@@ -2066,7 +2066,9 @@ const selfCheckResultEl = document.getElementById("self-check-result");
 const selfCheckSummaryEl = document.getElementById("self-check-summary");
 const selfCheckDetailsWrap = document.getElementById("self-check-details-wrap");
 const selfCheckDetailsText = document.getElementById("self-check-details-text");
-const copyDiagnosticsBtn = document.getElementById("copy-diagnostics-btn");
+const copySelfCheckDetailsBtn =
+  document.getElementById("copy-self-check-details-btn") ||
+  document.querySelector("#self-check-details-wrap button");
 
 let lastSelfCheckReport = null;
 
@@ -2140,16 +2142,16 @@ if (runSelfCheckBtn) {
   runSelfCheckBtn.addEventListener("click", () => executeSelfCheck(false));
 }
 
-if (copyDiagnosticsBtn) {
-  copyDiagnosticsBtn.addEventListener("click", () => {
+if (copySelfCheckDetailsBtn) {
+  copySelfCheckDetailsBtn.addEventListener("click", () => {
     const text = lastSelfCheckReport
       ? JSON.stringify(lastSelfCheckReport, null, 2)
       : (selfCheckDetailsText?.textContent || "No diagnostics available");
     if (navigator.clipboard) {
       navigator.clipboard.writeText(text).then(() => {
-        copyDiagnosticsBtn.textContent = "Copied!";
+        copySelfCheckDetailsBtn.textContent = "Copied!";
         setTimeout(() => {
-          copyDiagnosticsBtn.textContent = "Copy details";
+          copySelfCheckDetailsBtn.textContent = "Copy details";
         }, 2000);
       });
     }

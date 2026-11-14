@@ -13,6 +13,23 @@ Write-Host "=== ChordLens Build Pipeline ===" -ForegroundColor Cyan
 $version = (Get-Content "$ROOT\VERSION" -Raw).Trim()
 Write-Host "Building ChordLens version $version" -ForegroundColor Green
 
+# 1b. Frontend JavaScript syntax check
+Write-Host "`n--- Checking frontend JavaScript syntax ---" -ForegroundColor Cyan
+$jsFiles = Get-ChildItem -Path "$ROOT\frontend" -Filter *.js
+$syntaxFailed = $false
+foreach ($js in $jsFiles) {
+    & node --check $js.FullName
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "Syntax check FAILED for: $($js.Name)"
+        $syntaxFailed = $true
+    } else {
+        Write-Host "  [PASS] $($js.Name)" -ForegroundColor Green
+    }
+}
+if ($syntaxFailed) {
+    throw "Frontend JavaScript syntax check failed. Aborting build."
+}
+
 & "$ROOT\.venv\Scripts\python.exe" "$ROOT\scripts\make_version_info.py"
 
 # 2. PyInstaller --onedir build

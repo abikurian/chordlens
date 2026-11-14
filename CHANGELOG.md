@@ -2,6 +2,12 @@
 
 All notable changes to ChordLens are documented in this file.
 
+## [0.2.1] - 2026-11-14
+
+### Fixed
+- Resolved duplicate `copyDiagnosticsBtn` identifier in `frontend/app.js` that caused a syntax error and prevented file upload and YouTube click handlers from initializing; separated error box diagnostics from Settings self-check details.
+- Added build-time frontend JavaScript syntax verification (`node --check`) to fail builds immediately on syntax errors.
+
 ## [0.2.0] - 2026-11-13
 
 ### Added

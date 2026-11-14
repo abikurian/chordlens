@@ -1,6 +1,6 @@
 ; Inno Setup 6 Script for ChordLens
 #define MyAppName "ChordLens"
-#define MyAppVersion "0.2.0"
+#define MyAppVersion "0.2.1"
 #define MyAppPublisher "Abi Kurian Varghese"
 #define MyAppURL "https://github.com/abikurian/chordlens"
 #define MyAppExeName "ChordLens.exe"
@@ -24,7 +24,7 @@ Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
 ArchitecturesInstallIn64BitMode=x64compatible
-VersionInfoVersion=0.2.0.0
+VersionInfoVersion=0.2.1.0
 VersionInfoCompany={#MyAppPublisher}
 VersionInfoDescription=ChordLens Setup
 VersionInfoCopyright=Copyright (c) 2026 {#MyAppPublisher}
